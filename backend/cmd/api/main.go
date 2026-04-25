@@ -19,14 +19,10 @@ import (
 )
 
 func main() {
-	// 1. Initialize Logger
 	logger.Init()
 	logger.Log.Info("Starting API container...")
 
-	// 2. Load Config
 	cfg := config.Load()
-
-	// 3. Initialize Connections
 	ctx := context.Background()
 
 	if err := db.InitPostgres(ctx, cfg.DatabaseURL); err != nil {
@@ -43,33 +39,25 @@ func main() {
 		logger.Log.Error("RabbitMQ init failed", "error", err.Error())
 		os.Exit(1)
 	}
-	// Note: In production, you'd handle graceful shutdowns here
 	defer broker.Conn.Close()
 	defer broker.Channel.Close()
 
-	// 4. Declare the RabbitMQ Queue (Ensures it exists before publishing)
+	// Declare the Queue
 	_, err := broker.Channel.QueueDeclare(
-		"sync_queue", // Queue name
-		true,         // Durable (survives broker restarts)
-		false,        // Auto-delete
-		false,        // Exclusive
-		false,        // No-wait
-		nil,          // Arguments
+		"sync_queue", true, false, false, false, nil,
 	)
 	if err != nil {
 		logger.Log.Error("Failed to declare queue", "error", err.Error())
 		os.Exit(1)
 	}
 
-	// 5. Setup Router
+	// Setup Router
 	r := chi.NewRouter()
-	r.Use(middleware.Logger)    // Logs HTTP requests to stdout
-	r.Use(middleware.Recoverer) // Prevents the API from crashing on panics
+	r.Use(middleware.Logger)
+	r.Use(middleware.Recoverer)
 
-	// 6. Define Routes
 	r.Post("/api/v1/ping", handlePing)
 
-	// 7. Start Server
 	logger.Log.Info("API listening on port " + cfg.APIPort)
 	if err := http.ListenAndServe(":"+cfg.APIPort, r); err != nil {
 		logger.Log.Error("Server failed to start", "error", err.Error())
@@ -77,12 +65,10 @@ func main() {
 	}
 }
 
-// handlePing processes the test request, hits Redis, and publishes to RabbitMQ
 func handlePing(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	timestamp := time.Now().UTC().Format(time.RFC3339)
 
-	// Step A: Cache the timestamp in Redis
 	err := cache.Client.Set(ctx, "last_ping", timestamp, 0).Err()
 	if err != nil {
 		logger.Log.Error("Failed to set redis key", "error", err.Error())
@@ -90,23 +76,17 @@ func handlePing(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Step B: Create the payload and publish to RabbitMQ
 	payload := map[string]string{
 		"status":    "ping_received",
 		"timestamp": timestamp,
 	}
 	body, _ := json.Marshal(payload)
 
-	err = broker.Channel.PublishWithContext(ctx,
-		"",           // Exchange (empty string means default direct exchange)
-		"sync_queue", // Routing key (matches the queue name)
-		false,        // Mandatory
-		false,        // Immediate
-		amqp.Publishing{
-			ContentType:  "application/json",
-			Body:         body,
-			DeliveryMode: amqp.Persistent, // Ensure the message is written to disk
-		})
+	err = broker.Channel.PublishWithContext(ctx, "", "sync_queue", false, false, amqp.Publishing{
+		ContentType:  "application/json",
+		Body:         body,
+		DeliveryMode: amqp.Persistent,
+	})
 	if err != nil {
 		logger.Log.Error("Failed to publish message", "error", err.Error())
 		http.Error(w, "Broker Error", http.StatusInternalServerError)
@@ -114,8 +94,6 @@ func handlePing(w http.ResponseWriter, r *http.Request) {
 	}
 
 	logger.Log.Info("Ping successfully processed and queued")
-
-	// Step C: Respond to the client
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	w.Write(body)
