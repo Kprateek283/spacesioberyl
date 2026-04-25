@@ -1,14 +1,18 @@
 package main
 
 import (
-	"fmt"
 	"net/http"
+	"os"
+
+	"github.com/spacesioberyl/system-v1/internal/logger"
 )
 
 func main() {
-	fmt.Println("API container is running on port 8080...")
-	// Starts a dummy web server to keep the container alive
+	logger.Init()
+	logger.Log.Info("Starting API container", "port", "8080")
+
 	if err := http.ListenAndServe(":8080", nil); err != nil {
-		fmt.Println("Server failed:", err)
+		logger.Log.Error("Server failed", "error", err.Error())
+		os.Exit(1)
 	}
 }
