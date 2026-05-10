@@ -71,4 +71,3 @@ The API client (`ApiClient` using Dio) is configured with automatic token inject
 2.  **Camera/Image Picker:**
     *   Connect the `image_picker` package to the `AddSiteUpdateModal` and `LogExpenseModal` so staff can snap physical photos of sites and receipts.
 
-Good luck! The backend is robust, strictly typed, and thoroughly tested. If you follow the API contracts strictly, the UI will snap into place beautifully.
