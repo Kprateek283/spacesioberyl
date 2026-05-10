@@ -1,68 +1,136 @@
-# Module Flows & Comprehensive Business Logic
+# Comprehensive System Workflows & Feature Architecture
 
-This document maps out the specific execution flows, state machines, and edge cases across the Spacesio Beryl CRM & ERP.
-
----
-
-## 1. CRM: Lead & Sales Pipeline Scenarios
-
-### Scenario A: Successful Conversion (Lead -> Order)
-1. **Lead Creation:** A Walk-in lead is created (`status: new`).
-2. **Follow-Up Scheduled:** Sales Rep schedules a site visit via `POST /crm/followups`.
-3. **Follow-Up Completed:** Rep visits site, fills out outcome notes, marks follow-up complete. Lead moves to `site_visit`.
-4. **Quotation Generated:** Rep generates a quote (`POST /crm/leads/:id/quotations`) with a 10% tax and "Advance + Post-Install" terms. Status: `pdf_sent`.
-5. **Client Approval:** Client agrees. Rep hits `PATCH /crm/quotations/:id/status` to `client_approved`.
-6. **Background Handoff:** RabbitMQ intercepts the `quote_approved` event and silently spins up a corresponding `Order` in the Logistics table.
-
-### Scenario B: Lead Lost
-1. **Lead Interaction:** Sales Rep realizes the client cannot afford the product.
-2. **Status Update:** Rep calls `PATCH /crm/leads/:id/status` setting `status: lost`.
-3. **Mandatory Check:** The backend strict validation kicks in—the request *must* contain `lost_reason` (e.g., "Budget constraints").
-4. **Follow-Ups Cleared:** All pending follow-ups for this lead are automatically cancelled or hidden from daily task queues.
-
-### Scenario C: Quotation Rejected
-1. **Quote Sent:** Client reviews the PDF.
-2. **Rejection:** Client rejects due to high price.
-3. **Status Update:** Rep updates Quote status to `rejected`.
-4. **Next Steps:** Lead returns to `negotiation` state. Rep generates a *new* quotation with a discount. The system maintains the history of the rejected quote for auditing.
+This document details every feature within the Spacesio Beryl backend, its purpose, its internal execution flow, and how it logically links to the next feature in the business lifecycle.
 
 ---
 
-## 2. HR: Attendance & Leave Scenarios
+## 1. Identity & Access Management (IAM)
 
-### Scenario A: Standard Office Attendance
-1. **Check-In:** Employee arrives at office, connects to Wi-Fi. 
-2. **API Call:** `POST /hr/attendance/check-in` payload contains the Office IP.
-3. **Result:** Backend detects IP match, logs `check_in_time`, sets `status: present`.
-4. **Edge Case (Double Tap):** If employee spams Check-In, the DB's `ON CONFLICT DO NOTHING` constraint silently drops the duplicate requests, preventing data corruption.
+### Feature: Dual-PIN Authentication & Ghost Mode
+*   **Purpose:** To secure access to the application and provide a hardware-level toggle for viewing sensitive (cash-based) financial records.
+*   **Internal Flow:**
+    1. Super Admin logs in via email/password (`POST /api/v1/login`) to receive a temporary token.
+    2. System checks if PINs are set. If not, Super Admin sets Normal and High-Security PINs (`POST /api/v1/iam/setup-pins`).
+    3. For daily use, users authenticate via PIN (`POST /api/v1/iam/verify-pin`).
+    4. If the High-Security PIN is used, the backend injects `"ghost_mode": true` into the JWT payload.
+*   **Logical Link:** This JWT is passed in the `Authorization` header to every other module. Modules like CRM (Quotations) and Execution (Payments) read this claim to conditionally hide or show cash transactions.
 
-### Scenario B: Remote/Field Check-In
-1. **Check-In:** Employee is at a client site.
-2. **API Call:** `POST /hr/attendance/check-in` payload contains a cellular IP.
-3. **Result:** IP mismatch. Status is set to `pending_override`. Employee is forced to provide an `override_reason`.
-4. **Admin Approval:** Manager reviews the `pending_override` list and approves it, officially changing status to `off_site`.
-
-### Scenario C: Leave Cancellation (State Machine)
-1. **Request:** Employee requests Casual Leave (`status: pending`).
-2. **Self-Cancel:** Employee changes their mind before approval. They call `PATCH /hr/leaves/:id` to modify dates or cancel.
-3. **Admin Intervention:** Admin approves the leave (`status: approved`).
-4. **Locked State:** Employee tries to cancel again. Backend rejects the request with `400 Bad Request` because the leave state has moved past `pending`. Only an Admin can revert it.
+### Feature: User & Role Management
+*   **Purpose:** To control who can access which parts of the ERP.
+*   **Internal Flow:**
+    1. Admin fetches user list (`GET /api/v1/users`).
+    2. Admin creates a new user (`POST /api/v1/users`), assigning a specific role (e.g., `staff`, `admin`) and department (e.g., `sales`, `operations`).
+*   **Logical Link:** Departments dictate task assignments. Sales staff get CRM follow-ups; Operations staff get Logistics dispatches.
 
 ---
 
-## 3. Logistics & Execution Scenarios
+## 2. CRM & Sales Pipeline
 
-### Scenario A: Offline Dispatch Syncing
-1. **Network Drop:** Driver arrives at an underground warehouse with zero cell reception.
-2. **Action:** Driver clicks "Swipe to Log Delivery".
-3. **Local Queue:** Flutter app saves the payload `{ type: delivery, timestamp: ... }` to the SQLite `outbox_queue`.
-4. **Network Return:** Driver drives out of the warehouse. `connectivity_plus` detects 4G.
-5. **Sync Flush:** `SyncService` immediately drains the queue, sending the payload to the backend. The UI global banner shows "Syncing 1 item...".
+### Feature: Lead Management
+*   **Purpose:** To track potential clients from initial contact to final sale.
+*   **Internal Flow:**
+    1. Lead is created (`POST /api/v1/crm/leads`) with status `new`.
+    2. Sales Rep updates the status (`PATCH /api/v1/crm/leads/:id/status`) as the relationship progresses (`contacted`, `negotiation`).
+*   **Edge Case (Lead Lost):** If marked `lost`, a mandatory `lost_reason` is required. The system automatically cancels all pending follow-ups for this lead.
+*   **Logical Link:** Leads are the parent entity for Follow-ups, Quotations, and Complaints.
 
-### Scenario B: The Financial Lock (Execution -> Accounts)
-1. **Job Completion:** Carpenters finish assembling the furniture.
-2. **Attempted Payment:** Accounts team tries to release the "Final Discharge" payment to the carpenter.
-3. **Backend Block:** The API throws a `400 Bad Request: Cannot process final payment without client signoff.`
-4. **Client Action:** Tech Manager hands the tablet to the client. Client physically signs the `SignaturePad`.
-5. **Signoff API:** Frontend uploads PNG to MinIO, sends the URL to `PATCH /execution/jobs/:id/signoff`. Job status changes to `client_approved`.
-6. **Payment Unlocked:** Accounts team re-attempts the payment. The API validates `client_approved` and processes the ledger transaction.
+### Feature: Follow-ups
+*   **Purpose:** To ensure Sales Reps never miss a scheduled interaction with a Lead.
+*   **Internal Flow:**
+    1. Rep schedules a follow-up (`POST /api/v1/crm/followups`). Status is `pending`.
+    2. Rep completes the task, providing mandatory `outcome_notes` (`PATCH /api/v1/crm/followups/:id/complete`).
+*   **Edge Case (Missed Tasks):** A background cron worker scans the database hourly. Any `pending` follow-up older than 24 hours is automatically flagged as `missed`, alerting management.
+
+### Feature: Quotation Generation & Approval
+*   **Purpose:** To formally propose pricing and terms to the Lead.
+*   **Internal Flow:**
+    1. Rep generates a quote (`POST /api/v1/crm/leads/:id/quotations`) including line items, tax, and payment terms. (Cash terms are blocked if `ghost_mode` is false).
+    2. Status becomes `pdf_sent`.
+    3. If rejected, status is `rejected` and the lead returns to negotiation.
+    4. If accepted, status is updated to `client_approved`.
+*   **Logical Link (The Handoff):** Marking a quote as `client_approved` triggers the `quote_approved` RabbitMQ event. This automatically creates an **Order** in the Logistics module.
+
+### Feature: Client Complaints
+*   **Purpose:** To handle post-sale support ticketing.
+*   **Internal Flow:**
+    1. A complaint is logged against a Lead or Order (`POST /api/v1/crm/complaints`).
+    2. Status starts as `open`.
+*   **Edge Case (Escalation):** A background cron worker monitors complaints. If a `high` priority complaint remains `open` for 48 hours, it is escalated to management.
+
+---
+
+## 3. Supply Chain & Logistics
+
+### Feature: Order Management & Procurement
+*   **Purpose:** To fulfill the approved CRM Quotations.
+*   **Internal Flow:**
+    1. Order is automatically created via the RabbitMQ `quote_approved` event (Status: `pending_po`).
+    2. Ops team creates Purchase Orders (`POST /api/v1/logistics/orders/:id/pos`) linking to external Vendors.
+    3. Order status updates to `partially_ordered` or `ready_for_dispatch`.
+*   **Logical Link:** Once items are procured, the Order must be shipped to the client site via Dispatches.
+
+### Feature: Dispatch & Delivery Tracking
+*   **Purpose:** To track the physical movement of goods.
+*   **Internal Flow:**
+    1. Ops creates a dispatch plan (`POST /api/v1/logistics/dispatches`) assigning a driver and vehicle.
+    2. Driver swipes to log departure (`PATCH /api/v1/logistics/dispatches/:id/log` with `type: dispatch`).
+    3. Driver swipes to log arrival at site (`type: delivery`), optionally uploading a signed delivery challan.
+*   **Edge Case (Offline Sync):** If the driver is in a dead zone, the frontend saves the timestamp to SQLite and syncs it when the network returns.
+*   **Logical Link:** Once an Order is fully delivered, it becomes eligible to be converted into an **Installation Job** in the Execution module.
+
+---
+
+## 4. Field Execution & Installation
+
+### Feature: Job & Contractor Assignment
+*   **Purpose:** To manage external contractors installing the delivered products.
+*   **Internal Flow:**
+    1. Tech Admin creates an Installation Job from a delivered Order (`POST /api/v1/execution/orders/:id/installation`).
+    2. Manager assigns an external installer from the directory, setting the negotiated price (`PATCH /api/v1/execution/jobs/:id/assign`).
+
+### Feature: Manual Presence Verification (Check-In)
+*   **Purpose:** To prevent GPS spoofing by external contractors.
+*   **Internal Flow:**
+    1. Internal Tech Manager physically verifies the contractor is on site or calls them.
+    2. Manager logs the verification (`POST /api/v1/execution/contractors/jobs/:id/check-in`), providing mandatory `verification_notes` (e.g., "Confirmed via WhatsApp").
+
+### Feature: Site Updates
+*   **Purpose:** To maintain a visual timeline of installation progress.
+*   **Internal Flow:**
+    1. Tech Manager captures photos and notes on-site.
+    2. Sent via `POST /api/v1/execution/jobs/:id/updates/sync` (Supports offline queuing).
+
+### Feature: Client Signoff & The Financial Lock
+*   **Purpose:** To ensure client satisfaction before releasing final payments to external contractors.
+*   **Internal Flow:**
+    1. Installation finishes. Client physically signs the tablet.
+    2. Signature PNG is uploaded to MinIO.
+    3. URL is submitted via `PATCH /api/v1/execution/jobs/:id/signoff`. Job becomes `client_approved`.
+*   **Logical Link:** The Accounts module attempts to pay the contractor (`POST /api/v1/execution/contractors/jobs/:id/payments`). If the payment type is `final_discharge`, the API strictly checks if the job is `client_approved`. If not, the payment is blocked.
+
+---
+
+## 5. Internal HR & Administration
+
+### Feature: Strict Attendance
+*   **Purpose:** To log employee work hours.
+*   **Internal Flow:**
+    1. Employee clicks Check-In (`POST /api/v1/hr/attendance/check-in`).
+    2. Backend checks IP. If matched to office, status is `present`.
+    3. If IP mismatches, status is `pending_override`. Manager must approve.
+    4. Employee clicks Check-Out (`POST /api/v1/hr/attendance/check-out`).
+*   **Edge Case:** The database uses `ON CONFLICT DO NOTHING` to prevent users from checking in multiple times a day.
+
+### Feature: Leave State Machine
+*   **Purpose:** To handle employee time-off requests securely.
+*   **Internal Flow:**
+    1. Employee requests leave (`POST /api/v1/hr/leaves`). Status: `pending`.
+    2. While `pending`, employee can modify or cancel it.
+    3. Admin reviews and updates status to `approved` or `rejected` with remarks (`PATCH /api/v1/hr/leaves/:id/status`).
+*   **Edge Case:** Once the status moves past `pending`, the frontend and backend strictly block the employee from editing or cancelling the leave.
+
+### Feature: Office Expenses
+*   **Purpose:** To track petty cash and internal ledger items.
+*   **Internal Flow:**
+    1. Employee uploads receipt photo to MinIO.
+    2. Employee submits expense amount and context (`POST /api/v1/hr/expenses`).
