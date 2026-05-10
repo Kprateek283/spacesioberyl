@@ -47,6 +47,15 @@ Manages external contractors and site completion.
 
 ---
 
+## Detailed Documentation
+
+For an in-depth understanding of the backend integration, please refer to the following handover documents:
+
+*   **[API Contracts](api_contracts.md):** An exhaustive list of all 70+ REST API endpoints. This document details the HTTP methods, exact JSON request payloads, and expected responses for every module.
+*   **[Module Flows & Architecture](module_flows.md):** A comprehensive guide to the internal state machines (e.g., Leave approval rules) and inter-module event-driven architecture. This document explains how edge cases are handled (like missing network during dispatch or lead loss) and how modules communicate via RabbitMQ.
+
+---
+
 ## Background Workers
 
 To keep the primary HTTP API fast and responsive, heavy tasks and cross-module communications are offloaded to RabbitMQ and handled by the Go worker process (cmd/worker/main.go):
