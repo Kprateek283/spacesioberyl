@@ -1,6 +1,6 @@
 services:
   postgres:
-    image: postgres:16-alpine
+    image: postgres:17-alpine
     container_name: system_db
     restart: always
     environment:
@@ -8,7 +8,7 @@ services:
       POSTGRES_PASSWORD: securepassword
       POSTGRES_DB: erp_v1
     ports:
-      - "5432:5432"
+      - "5434:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
 
@@ -32,6 +32,34 @@ services:
     volumes:
       - mqdata:/var/lib/rabbitmq
 
+  minio:
+    image: minio/minio:latest
+    container_name: system_storage
+    restart: always
+    ports:
+      - "9001:9000" # API Port (S3 Compatible)
+      - "9002:9001" # Web UI Console
+    environment:
+      MINIO_ROOT_USER: admin
+      MINIO_ROOT_PASSWORD: securepassword
+    volumes:
+      - miniodata:/data
+    command: server /data --console-address ":9001"
+
+  minio-setup:
+    image: minio/mc:latest
+    container_name: system_storage_setup
+    depends_on:
+      - minio
+    entrypoint: >
+      /bin/sh -c "
+      sleep 5;
+      /usr/bin/mc config host add myminio http://minio:9000 admin securepassword;
+      /usr/bin/mc mb myminio/crm-files --ignore-existing;
+      /usr/bin/mc anonymous set public myminio/crm-files;
+      exit 0;
+      "
+
   api:
     build:
       context: ./backend
@@ -41,13 +69,14 @@ services:
     ports:
       - "8080:8080"
     volumes:
-      - ./logs:/app/logs  # Maps the host's log folder to the container
+      - ./logs:/app/logs
     env_file:
       - .env
     depends_on:
       - postgres
       - redis
       - rabbitmq
+      - minio
 
   worker:
     build:
@@ -63,8 +92,10 @@ services:
       - postgres
       - redis
       - rabbitmq
+      - minio
 
 volumes:
   pgdata:
   redisdata:
   mqdata:
+  miniodata: # NEW

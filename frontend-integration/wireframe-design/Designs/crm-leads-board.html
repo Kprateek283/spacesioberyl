@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Login - Enterprise Suite</title>
+<!-- Google Fonts: IBM Plex Sans (Headlines/Display) & Inter (Body/Labels) -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&amp;family=Inter:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<!-- Material Symbols -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Theme Configuration -->
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "error": "#ba1a1a",
+                    "on-primary": "#ffffff",
+                    "surface-tint": "#2c694e",
+                    "tertiary": "#5e4300",
+                    "primary-fixed": "#b1f0ce",
+                    "on-tertiary-fixed": "#271900",
+                    "error-container": "#ffdad6",
+                    "on-surface": "#111c2c",
+                    "inverse-primary": "#95d4b3",
+                    "inverse-on-surface": "#ebf1ff",
+                    "on-error": "#ffffff",
+                    "outline-variant": "#bfc9c1",
+                    "surface-container-low": "#f0f3ff",
+                    "on-tertiary-fixed-variant": "#5d4200",
+                    "tertiary-fixed-dim": "#f7bd48",
+                    "tertiary-fixed": "#ffdea6",
+                    "on-secondary-fixed": "#0b1d2d",
+                    "on-secondary-container": "#556679",
+                    "on-error-container": "#93000a",
+                    "secondary-fixed-dim": "#b7c8de",
+                    "on-background": "#111c2c",
+                    "primary": "#0f5238",
+                    "surface-container-lowest": "#ffffff",
+                    "surface-container-highest": "#d8e3fa",
+                    "surface-dim": "#cfdaf1",
+                    "on-primary-fixed-variant": "#0e5138",
+                    "on-secondary": "#ffffff",
+                    "primary-container": "#2d6a4f",
+                    "outline": "#707973",
+                    "inverse-surface": "#263142",
+                    "secondary-fixed": "#d2e4fb",
+                    "surface": "#f9f9ff",
+                    "secondary-container": "#d2e4fb",
+                    "surface-variant": "#d8e3fa",
+                    "on-surface-variant": "#404943",
+                    "primary-fixed-dim": "#95d4b3",
+                    "on-primary-fixed": "#002114",
+                    "surface-container": "#e7eeff",
+                    "surface-bright": "#f9f9ff",
+                    "on-tertiary": "#ffffff",
+                    "on-tertiary-container": "#ffd384",
+                    "on-primary-container": "#a8e7c5",
+                    "surface-container-high": "#dee8ff",
+                    "tertiary-container": "#7c5900",
+                    "secondary": "#4f6073",
+                    "on-secondary-fixed-variant": "#38485a",
+                    "background": "#f9f9ff"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "stack-lg": "24px",
+                    "unit": "8px",
+                    "container-padding-desktop": "32px",
+                    "gutter": "24px",
+                    "container-padding-mobile": "16px",
+                    "stack-sm": "8px",
+                    "stack-md": "16px"
+            },
+            "fontFamily": {
+                    "body-md": ["Inter"],
+                    "label-lg": ["Inter"],
+                    "headline-md": ["IBM Plex Sans"],
+                    "display-lg": ["IBM Plex Sans"],
+                    "headline-lg-mobile": ["IBM Plex Sans"],
+                    "body-lg": ["Inter"],
+                    "body-sm": ["Inter"],
+                    "headline-lg": ["IBM Plex Sans"],
+                    "label-md": ["Inter"],
+                    "headline-sm": ["IBM Plex Sans"]
+            },
+            "fontSize": {
+                    "body-md": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                    "label-lg": ["14px", {"lineHeight": "20px", "letterSpacing": "0.02em", "fontWeight": "600"}],
+                    "headline-md": ["24px", {"lineHeight": "32px", "fontWeight": "500"}],
+                    "display-lg": ["48px", {"lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "600"}],
+                    "headline-lg-mobile": ["28px", {"lineHeight": "36px", "fontWeight": "600"}],
+                    "body-lg": ["18px", {"lineHeight": "28px", "fontWeight": "400"}],
+                    "body-sm": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                    "headline-lg": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                    "label-md": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600"}],
+                    "headline-sm": ["20px", {"lineHeight": "28px", "fontWeight": "500"}]
+            }
+          }
+        }
+      }
+    </script>
+<style>
+        /* Base Material Symbol class */
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background antialiased min-h-screen flex items-center justify-center relative overflow-hidden">
+<!-- Ambient Background -->
+<div class="absolute inset-0 z-0 bg-cover bg-center opacity-30" data-alt="A stunning, highly professional corporate background suitable for an enterprise login screen. The scene features abstract, flowing architectural glass panels capturing soft, natural morning light. The color palette revolves around crisp whites, subtle slate grays, and very soft, diffused hints of deep emerald green to match the brand identity. The overall mood is incredibly clean, modern, secure, and minimal, conveying institutional trust and high-end technological capability without distracting from the central UI elements." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuDbo2gssLALEDw2V1qjFgFd3iN2_9L4ncZdV2jbsBabP6lRcjQ7O2_8SvlElVhLPe-LgYu9CA1_tANR0CuMglV6ulOtCBVTF7LyXyp-8nrbm1lvE4Tp4ChGbhpSw0bcdB7E70o2qgTzGtb_oP7LJHmJlPNV4-CI4Q_x5T93ssuccgLtmEunqhw53-uEbGmbzShWNtuYOPTb-mcXE-OBF2tghJjE8A1vUdW1QgLW2AaqUippZ6HaE96KWDgloY-Oe6WPKfRURK9ajw');">
+</div>
+<!-- Main Container Card -->
+<main class="relative z-10 w-full max-w-[420px] bg-surface-container-lowest rounded-xl shadow-[0px_12px_24px_rgba(26,43,60,0.15)] p-container-padding-mobile md:p-container-padding-desktop mx-container-padding-mobile flex flex-col gap-stack-lg border border-outline-variant">
+<!-- Logo & Header -->
+<header class="flex flex-col items-center text-center gap-stack-sm pt-stack-sm">
+<div class="w-16 h-16 rounded-xl bg-surface-container flex items-center justify-center mb-unit">
+<span class="material-symbols-outlined text-primary text-[32px]" style="font-variation-settings: 'FILL' 1;">assured_workload</span>
+</div>
+<h1 class="font-headline-lg-mobile md:font-headline-lg text-headline-lg-mobile md:text-headline-lg text-on-surface">Enterprise Suite</h1>
+<p class="font-body-md text-body-md text-on-surface-variant">Secure access to your workspace.</p>
+</header>
+<!-- Login Form -->
+<form class="flex flex-col gap-stack-md w-full">
+<!-- Email Input Group -->
+<div class="flex flex-col gap-unit">
+<label class="font-label-lg text-label-lg text-on-surface" for="email">Email Address</label>
+<div class="relative w-full">
+<span class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-on-surface-variant">
+<span class="material-symbols-outlined text-[20px]">mail</span>
+</span>
+<input class="w-full bg-surface border border-outline rounded-lg pl-11 pr-4 py-3 font-body-md text-body-md text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all duration-200" id="email" placeholder="name@company.com" type="email"/>
+</div>
+</div>
+<!-- Password Input Group -->
+<div class="flex flex-col gap-unit">
+<label class="font-label-lg text-label-lg text-on-surface" for="password">Password</label>
+<div class="relative w-full">
+<span class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-on-surface-variant">
+<span class="material-symbols-outlined text-[20px]">lock</span>
+</span>
+<input class="w-full bg-surface border border-outline rounded-lg pl-11 pr-12 py-3 font-body-md text-body-md text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all duration-200" id="password" placeholder="••••••••" type="password"/>
+<button class="absolute inset-y-0 right-0 px-4 flex items-center text-on-surface-variant hover:text-primary transition-colors focus:outline-none" type="button">
+<span class="material-symbols-outlined text-[20px]">visibility</span>
+</button>
+</div>
+</div>
+<!-- Meta Actions -->
+<div class="flex justify-end items-center w-full mt-[-8px]">
+<a class="font-label-md text-label-md text-primary hover:text-on-primary-fixed-variant transition-colors" href="#">Forgot Password?</a>
+</div>
+<!-- Submit Action -->
+<button class="w-full bg-primary hover:bg-on-primary-fixed-variant text-on-primary font-label-lg text-label-lg rounded-lg py-3 mt-stack-sm transition-colors duration-200 flex items-center justify-center gap-2" type="submit">
+<span>Login</span>
+<span class="material-symbols-outlined text-[20px]">arrow_forward</span>
+</button>
+</form>
+</main>
+</body></html>

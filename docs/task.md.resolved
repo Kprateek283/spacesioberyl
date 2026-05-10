@@ -1,0 +1,71 @@
+# Spacesio Beryl — Implementation Tasks
+
+## Phase 1: Ghost Mode (IAM Enhancement)
+- [ ] Migration: Add `pin_hash` and `high_security_pin_hash` columns to users
+- [ ] Update IAM models with PIN fields
+- [ ] Update IAM DTOs (SetupPins, VerifyPin requests/responses)
+- [ ] Update IAM repository (SetupPins, GetPinHashes)
+- [ ] Update JWT (add `ghost_mode` claim)
+- [ ] Update IAM service (SetupPins, VerifyPin logic)
+- [ ] Update IAM handler (new endpoints)
+- [ ] Update IAM router (register PIN routes)
+- [ ] Update auth middleware (expose GhostMode from context)
+
+## Phase 2: Module 2 — Internal HR
+- [ ] Migration: Create `attendances`, `complaints`, `office_expenses` tables
+- [ ] HR models (Attendance, Complaint, Expense)
+- [ ] HR DTOs
+- [ ] Attendance repository + service + handler
+- [ ] Complaint repository + service + handler
+- [ ] Expense repository + service + handler
+- [ ] HR router
+- [ ] Wire HR module in app.go
+- [ ] Add OFFICE_IP to config/.env
+
+## Phase 3: Module 3 — CRM & Sales Pipeline
+- [ ] Migration: Create `leads`, `follow_ups`, `quotations`, `quotation_line_items` tables
+- [ ] MinIO client (`internal/storage/minio.go`)
+- [ ] Add MinIO config to config/.env
+- [ ] CRM models
+- [ ] CRM DTOs
+- [ ] Lead repository + service + handler
+- [ ] Follow-up repository + service + handler
+- [ ] Quotation repository + service + handler (with Ghost Mode filtering)
+- [ ] PDF generation for quotations
+- [ ] CRM router
+- [ ] Wire CRM module in app.go
+
+## Phase 4: Module 4 — Supply Chain & Logistics
+- [ ] Migration: Create `vendors`, `orders`, `purchase_orders`, `dispatches` tables
+- [ ] Logistics models
+- [ ] Logistics DTOs
+- [ ] Vendor repository + service + handler
+- [ ] Order repository + service + handler (with Ghost Mode filtering)
+- [ ] Purchase Order repository + service + handler
+- [ ] Dispatch repository + service + handler
+- [ ] Logistics router
+- [ ] Wire Logistics module in app.go
+
+## Phase 5: Module 5 — Field Execution & Installation
+- [ ] Migration: Create `installers`, `installations`, `installation_updates` tables
+- [ ] Execution models
+- [ ] Execution DTOs
+- [ ] Installer repository + service + handler
+- [ ] Installation repository + service + handler
+- [ ] Site updates repository (bulk sync) + service + handler
+- [ ] Financial Lock (signoff) logic
+- [ ] Execution router
+- [ ] Wire Execution module in app.go
+
+## Phase 6: Background Workers
+- [ ] Refactor worker main.go for multi-queue consumption
+- [ ] Quote approved consumer (Module 3→4 handoff)
+- [ ] Installation signoff consumer (Financial Lock trigger)
+- [ ] Complaint escalation cron job
+- [ ] Follow-up missed cron job
+- [ ] Broker utility enhancements (queue declaration, publish helper)
+
+## Final Verification
+- [ ] `go build ./...` compiles cleanly
+- [ ] `go mod tidy` dependencies resolved
+- [ ] Docker Compose builds and boots all containers

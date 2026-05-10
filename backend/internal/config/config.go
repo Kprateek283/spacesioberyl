@@ -10,6 +10,22 @@ type Config struct {
 	DatabaseURL string
 	RedisURL    string
 	RabbitMQURL string
+	JWTSecret   string
+
+	// Office Network IP (for attendance WiFi check)
+	OfficeIP string
+
+	// MinIO (S3-compatible object storage)
+	MinIOEndpoint  string
+	MinIOAccessKey string
+	MinIOSecretKey string
+	MinIOBucket    string
+	MinIOUseSSL    bool
+
+	// WhatsApp (Meta Cloud API)
+	WhatsAppToken              string
+	WhatsAppPhoneID            string
+	WhatsAppTemplateNamespace  string
 }
 
 // Load reads environment variables and returns a populated Config struct.
@@ -20,6 +36,19 @@ func Load() *Config {
 		DatabaseURL: getEnv("DATABASE_URL", "postgres://admin:securepassword@system_db:5432/erp_v1?sslmode=disable"),
 		RedisURL:    getEnv("REDIS_URL", "redis://system_cache:6379/0"),
 		RabbitMQURL: getEnv("RABBITMQ_URL", "amqp://guest:guest@system_mq:5672/"),
+		JWTSecret:   getEnv("JWT_SECRET", "secret"),
+
+		OfficeIP: getEnv("OFFICE_IP", "0.0.0.0"), // 0.0.0.0 = dev mode (all IPs accepted)
+
+		MinIOEndpoint:  getEnv("MINIO_ENDPOINT", "system_storage:9000"),
+		MinIOAccessKey: getEnv("MINIO_ACCESS_KEY", "admin"),
+		MinIOSecretKey: getEnv("MINIO_SECRET_KEY", "securepassword"),
+		MinIOBucket:    getEnv("MINIO_BUCKET", "crm-files"),
+		MinIOUseSSL:    getEnv("MINIO_USE_SSL", "false") == "true",
+
+		WhatsAppToken:             getEnv("WHATSAPP_TOKEN", ""),
+		WhatsAppPhoneID:           getEnv("WHATSAPP_PHONE_ID", ""),
+		WhatsAppTemplateNamespace: getEnv("WHATSAPP_TEMPLATE_NAMESPACE", ""),
 	}
 }
 

@@ -1,0 +1,1087 @@
+{
+    "info": {
+        "name": "Spacesio Beryl CRM",
+        "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+    },
+    "variable": [
+        {
+            "key": "base",
+            "value": "http://localhost:8080"
+        },
+        {
+            "key": "token",
+            "value": ""
+        },
+        {
+            "key": "pin_token",
+            "value": ""
+        }
+    ],
+    "auth": {
+        "type": "bearer",
+        "bearer": [
+            {
+                "key": "token",
+                "value": "{{token}}"
+            }
+        ]
+    },
+    "item": [
+        {
+            "name": "0. System",
+            "item": [
+                {
+                    "name": "Health Check",
+                    "request": {
+                        "method": "GET",
+                        "url": "{{base}}/ping"
+                    }
+                },
+                {
+                    "name": "Test Ping (RabbitMQ)",
+                    "request": {
+                        "method": "POST",
+                        "url": "{{base}}/api/v1/test/ping"
+                    }
+                }
+            ]
+        },
+        {
+            "name": "1. IAM",
+            "item": [
+                {
+                    "name": "Login",
+                    "request": {
+                        "method": "POST",
+                        "url": "{{base}}/api/v1/login",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\"email\":\"admin@company.com\",\"password\":\"admin123\"}"
+                        }
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "var j=pm.response.json();if(j.access_token){pm.collectionVariables.set('token',j.access_token);}"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Get Me",
+                    "request": {
+                        "method": "GET",
+                        "url": "{{base}}/api/v1/users/me"
+                    }
+                },
+                {
+                    "name": "Setup PINs (Super Admin)",
+                    "request": {
+                        "method": "POST",
+                        "url": "{{base}}/api/v1/iam/setup-pins",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\"normal_pin\":\"1234\",\"confirm_normal_pin\":\"1234\",\"high_security_pin\":\"567890\",\"confirm_high_security_pin\":\"567890\"}"
+                        }
+                    }
+                },
+                {
+                    "name": "Verify PIN (Normal)",
+                    "request": {
+                        "method": "POST",
+                        "url": "{{base}}/api/v1/iam/verify-pin",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\"pin\":\"1234\"}"
+                        }
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "var j=pm.response.json();if(j.access_token){pm.collectionVariables.set('pin_token',j.access_token);pm.collectionVariables.set('token',j.access_token);}"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Verify PIN (Ghost Mode)",
+                    "request": {
+                        "method": "POST",
+                        "url": "{{base}}/api/v1/iam/verify-pin",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\"pin\":\"567890\"}"
+                        }
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "var j=pm.response.json();if(j.access_token){pm.collectionVariables.set('pin_token',j.access_token);pm.collectionVariables.set('token',j.access_token);}"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Create User",
+                    "request": {
+                        "method": "POST",
+                        "url": "{{base}}/api/v1/users",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\"name\":\"Test Staff\",\"email\":\"staff@company.com\",\"password\":\"password123\",\"role\":\"staff\",\"department\":\"operations\"}"
+                        }
+                    }
+                },
+                {
+                    "name": "List Users",
+                    "request": {
+                        "method": "GET",
+                        "url": "{{base}}/api/v1/users"
+                    }
+                },
+                {
+                    "name": "Refresh Token",
+                    "request": {
+                        "method": "POST",
+                        "url": "{{base}}/api/v1/refresh",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\"refresh_token\":\"PASTE_REFRESH_TOKEN\"}"
+                        }
+                    }
+                },
+                {
+                    "name": "Change Password",
+                    "request": {
+                        "method": "PATCH",
+                        "url": "{{base}}/api/v1/users/me/password",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\"old_password\":\"admin123\",\"new_password\":\"newpass123\"}"
+                        }
+                    }
+                },
+                {
+                    "name": "Logout",
+                    "request": {
+                        "method": "POST",
+                        "url": "{{base}}/api/v1/logout"
+                    }
+                }
+            ]
+        },
+        {
+            "name": "2. HR - Attendance",
+            "item": [
+                {
+                    "name": "Check In",
+                    "request": {
+                        "method": "POST",
+                        "url": "{{base}}/api/v1/hr/attendance/check-in",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{}"
+                        }
+                    }
+                },
+                {
+                    "name": "Check In (Override)",
+                    "request": {
+                        "method": "POST",
+                        "url": "{{base}}/api/v1/hr/attendance/check-in",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\"is_override_request\":true,\"override_reason\":\"Working from client site\"}"
+                        }
+                    }
+                },
+                {
+                    "name": "Check Out",
+                    "request": {
+                        "method": "POST",
+                        "url": "{{base}}/api/v1/hr/attendance/check-out"
+                    }
+                },
+                {
+                    "name": "My Attendance",
+                    "request": {
+                        "method": "GET",
+                        "url": "{{base}}/api/v1/hr/attendance/me"
+                    }
+                },
+                {
+                    "name": "List All (Admin)",
+                    "request": {
+                        "method": "GET",
+                        "url": "{{base}}/api/v1/hr/attendance"
+                    }
+                },
+                {
+                    "name": "List Overrides (Admin)",
+                    "request": {
+                        "method": "GET",
+                        "url": "{{base}}/api/v1/hr/attendance/overrides"
+                    }
+                },
+                {
+                    "name": "Resolve Override (Admin)",
+                    "request": {
+                        "method": "PATCH",
+                        "url": "{{base}}/api/v1/hr/attendance/overrides/1",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\"status\":\"approved\"}"
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "name": "2. HR - Leave Management",
+            "item": [
+                {
+                    "name": "Request Leave",
+                    "request": {
+                        "method": "POST",
+                        "url": "{{base}}/api/v1/hr/leaves",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\"leave_type\":\"casual_leave\",\"start_date\":\"2026-05-10\",\"end_date\":\"2026-05-12\",\"reason\":\"Family function\"}"
+                        }
+                    }
+                },
+                {
+                    "name": "My Leaves",
+                    "request": {
+                        "method": "GET",
+                        "url": "{{base}}/api/v1/hr/leaves/me"
+                    }
+                },
+                {
+                    "name": "Edit Leave (User)",
+                    "request": {
+                        "method": "PATCH",
+                        "url": "{{base}}/api/v1/hr/leaves/1",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\"start_date\":\"2026-05-11\",\"reason\":\"Updated reason\"}"
+                        }
+                    }
+                },
+                {
+                    "name": "Cancel Leave (User)",
+                    "request": {
+                        "method": "PATCH",
+                        "url": "{{base}}/api/v1/hr/leaves/1/cancel"
+                    }
+                },
+                {
+                    "name": "List All Leaves (Admin)",
+                    "request": {
+                        "method": "GET",
+                        "url": "{{base}}/api/v1/hr/leaves?status=pending"
+                    }
+                },
+                {
+                    "name": "Admin Edit Leave",
+                    "request": {
+                        "method": "PATCH",
+                        "url": "{{base}}/api/v1/hr/leaves/1/admin-edit",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\"leave_type\":\"sick_leave\",\"start_date\":\"2026-05-10\"}"
+                        }
+                    }
+                },
+                {
+                    "name": "Approve Leave (Admin)",
+                    "request": {
+                        "method": "PATCH",
+                        "url": "{{base}}/api/v1/hr/leaves/1/status",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\"status\":\"approved\",\"admin_remarks\":\"Approved, please hand over tasks\"}"
+                        }
+                    }
+                },
+                {
+                    "name": "Reject Leave (Admin)",
+                    "request": {
+                        "method": "PATCH",
+                        "url": "{{base}}/api/v1/hr/leaves/1/status",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\"status\":\"rejected\",\"admin_remarks\":\"Insufficient leave balance\"}"
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "name": "2. HR - Expenses",
+            "item": [
+                {
+                    "name": "Create Expense",
+                    "request": {
+                        "method": "POST",
+                        "url": "{{base}}/api/v1/hr/expenses",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\"amount\":500.00,\"person_paid\":\"Delivery Boy\",\"context\":\"Courier charges\",\"expense_date\":\"2026-05-05\"}"
+                        }
+                    }
+                },
+                {
+                    "name": "List Expenses (Admin)",
+                    "request": {
+                        "method": "GET",
+                        "url": "{{base}}/api/v1/hr/expenses"
+                    }
+                },
+                {
+                    "name": "Get Expense (Admin)",
+                    "request": {
+                        "method": "GET",
+                        "url": "{{base}}/api/v1/hr/expenses/1"
+                    }
+                }
+            ]
+        },
+        {
+            "name": "3. CRM - Leads",
+            "item": [
+                {
+                    "name": "Create Lead",
+                    "request": {
+                        "method": "POST",
+                        "url": "{{base}}/api/v1/crm/leads",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\"client_name\":\"Rahul Sharma\",\"client_phone\":\"+919876543210\",\"client_email\":\"rahul@test.com\",\"source\":\"walk_in\"}"
+                        }
+                    }
+                },
+                {
+                    "name": "List Leads",
+                    "request": {
+                        "method": "GET",
+                        "url": "{{base}}/api/v1/crm/leads"
+                    }
+                },
+                {
+                    "name": "Get Lead",
+                    "request": {
+                        "method": "GET",
+                        "url": "{{base}}/api/v1/crm/leads/1"
+                    }
+                },
+                {
+                    "name": "Assign Lead",
+                    "request": {
+                        "method": "PATCH",
+                        "url": "{{base}}/api/v1/crm/leads/1/assign",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\"assigned_to\":1}"
+                        }
+                    }
+                },
+                {
+                    "name": "Update Lead Status",
+                    "request": {
+                        "method": "PATCH",
+                        "url": "{{base}}/api/v1/crm/leads/1/status",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\"status\":\"first_call\"}"
+                        }
+                    }
+                },
+                {
+                    "name": "Mark Lead Lost",
+                    "request": {
+                        "method": "PATCH",
+                        "url": "{{base}}/api/v1/crm/leads/1/status",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\"status\":\"lost\",\"lost_reason\":\"Budget constraints\"}"
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "name": "3. CRM - Follow-ups",
+            "item": [
+                {
+                    "name": "Create Follow-up",
+                    "request": {
+                        "method": "POST",
+                        "url": "{{base}}/api/v1/crm/followups",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\"lead_id\":1,\"scheduled_for\":\"2026-05-06T10:00:00Z\",\"notes\":\"Call to discuss quotation\"}"
+                        }
+                    }
+                },
+                {
+                    "name": "My Queue",
+                    "request": {
+                        "method": "GET",
+                        "url": "{{base}}/api/v1/crm/followups/my-queue"
+                    }
+                },
+                {
+                    "name": "Complete Follow-up",
+                    "request": {
+                        "method": "PATCH",
+                        "url": "{{base}}/api/v1/crm/followups/1/complete",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\"outcome_notes\":\"Client interested, sending PDF\"}"
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "name": "3. CRM - Client Complaints",
+            "item": [
+                {
+                    "name": "Create Client Complaint",
+                    "request": {
+                        "method": "POST",
+                        "url": "{{base}}/api/v1/crm/complaints",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\"title\":\"Kitchen hinges loose\",\"description\":\"Hinges on upper cabinets are loose after 2 weeks\",\"priority\":\"high\",\"lead_id\":1,\"client_name\":\"Rahul Sharma\",\"client_phone\":\"+919876543210\"}"
+                        }
+                    }
+                },
+                {
+                    "name": "Create Complaint (Order-linked)",
+                    "request": {
+                        "method": "POST",
+                        "url": "{{base}}/api/v1/crm/complaints",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\"title\":\"Wardrobe alignment issue\",\"description\":\"Door not closing properly\",\"priority\":\"medium\",\"order_id\":1}"
+                        }
+                    }
+                },
+                {
+                    "name": "List Complaints",
+                    "request": {
+                        "method": "GET",
+                        "url": "{{base}}/api/v1/crm/complaints"
+                    }
+                },
+                {
+                    "name": "Assign Complaint (Admin)",
+                    "request": {
+                        "method": "PATCH",
+                        "url": "{{base}}/api/v1/crm/complaints/1/assign",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\"assigned_to\":1}"
+                        }
+                    }
+                },
+                {
+                    "name": "Resolve Complaint",
+                    "request": {
+                        "method": "PATCH",
+                        "url": "{{base}}/api/v1/crm/complaints/1/status",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\"status\":\"resolved\"}"
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "name": "3. CRM - Quotations",
+            "item": [
+                {
+                    "name": "Create Quotation",
+                    "request": {
+                        "method": "POST",
+                        "url": "{{base}}/api/v1/crm/leads/1/quotations",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\"payment_term_type\":\"100_advance\",\"tax_rate\":18,\"line_items\":[{\"item_name\":\"Modular Kitchen\",\"description\":\"L-shaped kitchen\",\"quantity\":1,\"unit_price\":150000},{\"item_name\":\"Wardrobe\",\"description\":\"3-door wardrobe\",\"quantity\":2,\"unit_price\":35000}]}"
+                        }
+                    }
+                },
+                {
+                    "name": "Create Cash Quotation (Ghost)",
+                    "request": {
+                        "method": "POST",
+                        "url": "{{base}}/api/v1/crm/leads/1/quotations",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\"payment_term_type\":\"cash\",\"tax_rate\":0,\"line_items\":[{\"item_name\":\"Custom Shelving\",\"quantity\":1,\"unit_price\":25000}]}"
+                        }
+                    }
+                },
+                {
+                    "name": "List Quotations (by Lead)",
+                    "request": {
+                        "method": "GET",
+                        "url": "{{base}}/api/v1/crm/leads/1/quotations"
+                    }
+                },
+                {
+                    "name": "Approve Quotation (triggers Order)",
+                    "request": {
+                        "method": "PATCH",
+                        "url": "{{base}}/api/v1/crm/quotations/1/status",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\"status\":\"client_approved\"}"
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "name": "4. Logistics - Vendors",
+            "item": [
+                {
+                    "name": "Create Vendor",
+                    "request": {
+                        "method": "POST",
+                        "url": "{{base}}/api/v1/logistics/vendors",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\"company_name\":\"ABC Plywood\",\"phone\":\"+911234567890\",\"contact_person\":\"Ravi\",\"email\":\"ravi@abc.com\",\"default_payment_mode\":\"bank_transfer\"}"
+                        }
+                    }
+                },
+                {
+                    "name": "List Vendors",
+                    "request": {
+                        "method": "GET",
+                        "url": "{{base}}/api/v1/logistics/vendors"
+                    }
+                },
+                {
+                    "name": "Get Vendor",
+                    "request": {
+                        "method": "GET",
+                        "url": "{{base}}/api/v1/logistics/vendors/1"
+                    }
+                }
+            ]
+        },
+        {
+            "name": "4. Logistics - Orders",
+            "item": [
+                {
+                    "name": "List Orders",
+                    "request": {
+                        "method": "GET",
+                        "url": "{{base}}/api/v1/logistics/orders"
+                    }
+                },
+                {
+                    "name": "Assign Order Manager",
+                    "request": {
+                        "method": "PATCH",
+                        "url": "{{base}}/api/v1/logistics/orders/1/assign",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\"operations_manager_id\":1}"
+                        }
+                    }
+                },
+                {
+                    "name": "Create Purchase Order",
+                    "request": {
+                        "method": "POST",
+                        "url": "{{base}}/api/v1/logistics/orders/1/pos",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\"vendor_id\":1,\"total_amount\":50000,\"expected_delivery_date\":\"2026-05-15\"}"
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "name": "4. Logistics - Dispatch",
+            "item": [
+                {
+                    "name": "Create Dispatch",
+                    "request": {
+                        "method": "POST",
+                        "url": "{{base}}/api/v1/logistics/dispatches",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\"order_id\":1,\"operations_staff_id\":1,\"loading_responsibility\":\"company\",\"transport_driver_name\":\"Suresh\",\"transport_vehicle_no\":\"KA-01-1234\"}"
+                        }
+                    }
+                },
+                {
+                    "name": "My Dispatches",
+                    "request": {
+                        "method": "GET",
+                        "url": "{{base}}/api/v1/logistics/dispatches/my-tasks"
+                    }
+                },
+                {
+                    "name": "Log Dispatch Time",
+                    "request": {
+                        "method": "PATCH",
+                        "url": "{{base}}/api/v1/logistics/dispatches/1/log",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\"type\":\"dispatch\",\"notes\":\"Left warehouse\"}"
+                        }
+                    }
+                },
+                {
+                    "name": "Log Delivery Time",
+                    "request": {
+                        "method": "PATCH",
+                        "url": "{{base}}/api/v1/logistics/dispatches/1/log",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\"type\":\"delivery\",\"notes\":\"Delivered to site\"}"
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "name": "5. Execution - Installers",
+            "item": [
+                {
+                    "name": "Create Installer",
+                    "request": {
+                        "method": "POST",
+                        "url": "{{base}}/api/v1/execution/installers",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\"name\":\"Raju Carpenter\",\"phone\":\"+919988776655\",\"expertise_area\":\"modular_kitchen\",\"standard_rate\":800,\"preferred_payment_mode\":\"upi\"}"
+                        }
+                    }
+                },
+                {
+                    "name": "List Installers",
+                    "request": {
+                        "method": "GET",
+                        "url": "{{base}}/api/v1/execution/installers"
+                    }
+                }
+            ]
+        },
+        {
+            "name": "5. Execution - Jobs",
+            "item": [
+                {
+                    "name": "Create Installation",
+                    "request": {
+                        "method": "POST",
+                        "url": "{{base}}/api/v1/execution/orders/1/installation",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\"technical_manager_id\":1}"
+                        }
+                    }
+                },
+                {
+                    "name": "List Jobs",
+                    "request": {
+                        "method": "GET",
+                        "url": "{{base}}/api/v1/execution/jobs"
+                    }
+                },
+                {
+                    "name": "My Jobs",
+                    "request": {
+                        "method": "GET",
+                        "url": "{{base}}/api/v1/execution/jobs/my-tasks"
+                    }
+                },
+                {
+                    "name": "Assign Installer",
+                    "request": {
+                        "method": "PATCH",
+                        "url": "{{base}}/api/v1/execution/jobs/1/assign",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\"installer_id\":1,\"agreed_installer_price\":15000,\"estimated_completion_date\":\"2026-05-20\"}"
+                        }
+                    }
+                },
+                {
+                    "name": "Sync Updates (Offline)",
+                    "request": {
+                        "method": "POST",
+                        "url": "{{base}}/api/v1/execution/jobs/1/updates/sync",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\"updates\":[{\"update_time\":\"2026-05-05T09:00:00Z\",\"notes\":\"Started kitchen panel cutting\"},{\"update_time\":\"2026-05-05T17:00:00Z\",\"notes\":\"Panels cut, ready for assembly\"}]}"
+                        }
+                    }
+                },
+                {
+                    "name": "Get Updates",
+                    "request": {
+                        "method": "GET",
+                        "url": "{{base}}/api/v1/execution/jobs/1/updates"
+                    }
+                },
+                {
+                    "name": "Signoff (Client Approved)",
+                    "request": {
+                        "method": "PATCH",
+                        "url": "{{base}}/api/v1/execution/jobs/1/signoff",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\"client_signoff_url\":\"https://minio/signatures/sig1.png\",\"status\":\"client_approved\",\"client_feedback\":\"Great work!\"}"
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "name": "5. Contractors",
+            "item": [
+                {
+                    "name": "Update Job Status",
+                    "request": {
+                        "method": "PATCH",
+                        "url": "{{base}}/api/v1/execution/contractors/jobs/1/status",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\"status\":\"accepted\"}"
+                        }
+                    }
+                },
+                {
+                    "name": "Check In",
+                    "request": {
+                        "method": "POST",
+                        "url": "{{base}}/api/v1/execution/contractors/jobs/1/check-in",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\"verification_notes\":\"Called at 9:30 AM, confirmed on site\",\"proof_photo_url\":\"\"}"
+                        }
+                    }
+                },
+                {
+                    "name": "Check Out",
+                    "request": {
+                        "method": "POST",
+                        "url": "{{base}}/api/v1/execution/contractors/jobs/1/check-out"
+                    }
+                },
+                {
+                    "name": "Record Advance Payment",
+                    "request": {
+                        "method": "POST",
+                        "url": "{{base}}/api/v1/execution/contractors/jobs/1/payments",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\"amount\":1500,\"payment_type\":\"advance\",\"payment_mode\":\"upi\",\"transaction_reference\":\"UPI-REF-001\"}"
+                        }
+                    }
+                },
+                {
+                    "name": "Record Final Discharge",
+                    "request": {
+                        "method": "POST",
+                        "url": "{{base}}/api/v1/execution/contractors/jobs/1/payments",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\"amount\":13500,\"payment_type\":\"final_discharge\",\"payment_mode\":\"bank_transfer\",\"transaction_reference\":\"NEFT-REF-002\"}"
+                        }
+                    }
+                },
+                {
+                    "name": "Get Ledger",
+                    "request": {
+                        "method": "GET",
+                        "url": "{{base}}/api/v1/execution/contractors/jobs/1/ledger"
+                    }
+                }
+            ]
+        }
+    ]
+}

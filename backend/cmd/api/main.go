@@ -2,99 +2,63 @@ package main
 
 import (
 	"context"
-	"encoding/json"
-	"net/http"
+	"log"
 	"os"
 	"time"
 
-	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
-	amqp "github.com/rabbitmq/amqp091-go"
-
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/joho/godotenv"
+	"github.com/spacesioberyl/system-v1/internal/app"
 	"github.com/spacesioberyl/system-v1/internal/broker"
 	"github.com/spacesioberyl/system-v1/internal/cache"
 	"github.com/spacesioberyl/system-v1/internal/config"
-	"github.com/spacesioberyl/system-v1/internal/db"
 	"github.com/spacesioberyl/system-v1/internal/logger"
+	"github.com/spacesioberyl/system-v1/internal/storage"
 )
 
 func main() {
-	logger.Init()
-	logger.Log.Info("Starting API container...")
-
+	// Load .env (optional in Docker, where env vars are set in docker-compose)
+	_ = godotenv.Load()
 	cfg := config.Load()
-	ctx := context.Background()
 
-	if err := db.InitPostgres(ctx, cfg.DatabaseURL); err != nil {
-		logger.Log.Error("Postgres init failed", "error", err.Error())
-		os.Exit(1)
+	// 1. Initialize Logger
+	logger.Init()
+	logger.Log.Info("Starting Spacesio Beryl API...")
+
+	// 2. Connect to PostgreSQL
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	dbPool, err := pgxpool.New(ctx, cfg.DatabaseURL)
+	if err != nil {
+		log.Fatalf("Unable to connect to database: %v", err)
 	}
+	defer dbPool.Close()
+	logger.Log.Info("Connected to PostgreSQL successfully")
 
+	// 3. Initialize Redis Cache
 	if err := cache.InitRedis(ctx, cfg.RedisURL); err != nil {
-		logger.Log.Error("Redis init failed", "error", err.Error())
-		os.Exit(1)
+		log.Fatalf("Unable to connect to Redis: %v", err)
 	}
 
+	// 4. Initialize RabbitMQ Broker
 	if err := broker.InitRabbitMQ(cfg.RabbitMQURL); err != nil {
-		logger.Log.Error("RabbitMQ init failed", "error", err.Error())
-		os.Exit(1)
+		log.Fatalf("Unable to connect to RabbitMQ: %v", err)
 	}
 	defer broker.Conn.Close()
 	defer broker.Channel.Close()
 
-	// Declare the Queue
-	_, err := broker.Channel.QueueDeclare(
-		"sync_queue", true, false, false, false, nil,
-	)
-	if err != nil {
-		logger.Log.Error("Failed to declare queue", "error", err.Error())
-		os.Exit(1)
+	// 5. Initialize MinIO Storage
+	if err := storage.InitMinIO(cfg.MinIOEndpoint, cfg.MinIOAccessKey, cfg.MinIOSecretKey, cfg.MinIOBucket, cfg.MinIOUseSSL); err != nil {
+		// MinIO failure is non-fatal — quotation PDFs will fail but the API will still run
+		logger.Log.Error("MinIO initialization failed (PDF generation will be unavailable)", "error", err)
 	}
 
-	// Setup Router
-	r := chi.NewRouter()
-	r.Use(middleware.Logger)
-	r.Use(middleware.Recoverer)
+	// 6. Set JWT secret as env var for middleware
+	os.Setenv("JWT_SECRET", cfg.JWTSecret)
 
-	r.Post("/api/v1/ping", handlePing)
-
-	logger.Log.Info("API listening on port " + cfg.APIPort)
-	if err := http.ListenAndServe(":"+cfg.APIPort, r); err != nil {
-		logger.Log.Error("Server failed to start", "error", err.Error())
-		os.Exit(1)
+	// 7. Create and start the Application
+	application := app.New(dbPool, cfg)
+	if err := application.Start(); err != nil {
+		log.Fatalf("Server failed to start: %v", err)
 	}
-}
-
-func handlePing(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-	timestamp := time.Now().UTC().Format(time.RFC3339)
-
-	err := cache.Client.Set(ctx, "last_ping", timestamp, 0).Err()
-	if err != nil {
-		logger.Log.Error("Failed to set redis key", "error", err.Error())
-		http.Error(w, "Cache Error", http.StatusInternalServerError)
-		return
-	}
-
-	payload := map[string]string{
-		"status":    "ping_received",
-		"timestamp": timestamp,
-	}
-	body, _ := json.Marshal(payload)
-
-	err = broker.Channel.PublishWithContext(ctx, "", "sync_queue", false, false, amqp.Publishing{
-		ContentType:  "application/json",
-		Body:         body,
-		DeliveryMode: amqp.Persistent,
-	})
-	if err != nil {
-		logger.Log.Error("Failed to publish message", "error", err.Error())
-		http.Error(w, "Broker Error", http.StatusInternalServerError)
-		return
-	}
-
-	logger.Log.Info("Ping successfully processed and queued")
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	w.Write(body)
 }

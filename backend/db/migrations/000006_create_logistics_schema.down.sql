@@ -1,0 +1,4 @@
+DROP TABLE IF EXISTS dispatches;
+DROP TABLE IF EXISTS purchase_orders;
+DROP TABLE IF EXISTS orders;
+DROP TABLE IF EXISTS vendors;
