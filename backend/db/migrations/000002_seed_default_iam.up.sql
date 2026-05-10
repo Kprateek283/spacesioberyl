@@ -12,7 +12,7 @@ INSERT INTO users (name, email, password_hash, role_id, department)
 VALUES (
            'System Admin',
            'admin@company.com',
-           '$2a$10$KfNpv6PgNMOJTXhcboLB7.8EyGSQi1EYhRSCJE5C/ceZlhIhKO71O', -- bcrypt("admin123")
+           '$2a$10$wOFfweE3yXyHLt/bXtjA.OAGfAl07Wp6JebfAQ5o6XgZ94GDIAfiW', -- bcrypt("admin123")
            (SELECT id FROM roles WHERE name = 'super_admin'),
            'management'
        )
