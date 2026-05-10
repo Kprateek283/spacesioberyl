@@ -6,7 +6,7 @@ This document serves as your definitive roadmap to bringing the UI to life and f
 
 ---
 
-## 🚀 Task 1: The Authentication & PIN Pipeline
+## Task 1: The Authentication & PIN Pipeline
 The system utilizes a dual-PIN architecture designed to mask specific financial data (Ghost Mode). You need to finalize this pipeline in the UI.
 
 1.  **Initial Login (`/login`):**
@@ -39,7 +39,7 @@ Field staff operate in areas with terrible cellular reception. Critical director
 
 ---
 
-## 📤 Task 3: The Offline Sync Engine (Mutations)
+## Task 3: The Offline Sync Engine (Mutations)
 When a field worker submits a form (POST/PATCH) with no network, the app must not freeze or throw a network error.
 
 1.  **The Outbox Queue:**
@@ -54,7 +54,7 @@ When a field worker submits a form (POST/PATCH) with no network, the app must no
 
 ---
 
-## 🔌 Task 4: Complete API Integration (70+ Routes)
+## Task 4: Complete API Integration (70+ Routes)
 The API client (`ApiClient` using Dio) is configured with automatic token injection and 401 refresh logic.
 
 1.  **The Blueprints:**
@@ -65,7 +65,7 @@ The API client (`ApiClient` using Dio) is configured with automatic token inject
 
 ---
 
-## 📸 Task 5: Hardware Integrations
+## Task 5: Hardware Integrations
 1.  **Client Signoff Canvas:**
     *   The `ClientSignoffScreen` uses the `signature` package. Ensure that the canvas outputs a compressed PNG byte array and successfully uploads to the backend.
 2.  **Camera/Image Picker:**
