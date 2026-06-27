@@ -1,18 +1,18 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 final apiClientProvider = Provider<ApiClient>((ref) {
   return ApiClient();
 });
 
 class ApiClient {
-  // Backend exposed locally on the dev machine.
-  static const String baseUrl =
-      'http://localhost:8080/api/v1';
+  static String get baseUrl =>
+      dotenv.env['API_URL'] ?? 'http://localhost:8080/api/v1';
 
   final Dio _dio = Dio(BaseOptions(
-    baseUrl: baseUrl,
+    baseUrl: dotenv.env['API_URL'] ?? 'http://localhost:8080/api/v1',
     connectTimeout: const Duration(seconds: 15),
   ));
   final _storage = const FlutterSecureStorage();
