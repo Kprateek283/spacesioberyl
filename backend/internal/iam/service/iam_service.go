@@ -321,7 +321,7 @@ func (s *IAMService) ForgotPassword(ctx context.Context, email string) error {
 	// Generate a secure 6-digit OTP
 	b := make([]byte, 3)
 	_, _ = rand.Read(b)
-	otp := fmt.Sprintf("%06d", int(b[0])<<16|int(b[1])<<8|int(b[2]))[:6]
+	otp := fmt.Sprintf("%06d", (int(b[0])<<16|int(b[1])<<8|int(b[2])) % 1000000)
 
 	// Store OTP in Redis with a 15-minute expiration
 	redisKey := "pwd_reset:" + user.Email

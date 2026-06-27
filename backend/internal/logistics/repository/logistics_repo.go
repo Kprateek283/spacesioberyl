@@ -139,8 +139,14 @@ func (r *LogisticsRepository) CreateOrderFromQuotation(ctx context.Context, quot
 }
 
 // =====================================================
-// PURCHASE ORDER OPERATIONS
+func (r *LogisticsRepository) UpdateOrderStatus(ctx context.Context, orderID int, status string) error {
+	query := `UPDATE orders SET status = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2`
+	_, err := r.db.Exec(ctx, query, status, orderID)
+	return err
+}
+
 // =====================================================
+// PURCHASE ORDER OPERATIONS
 
 func (r *LogisticsRepository) CreatePurchaseOrder(ctx context.Context, po *model.PurchaseOrder) (*model.PurchaseOrder, error) {
 	query := `

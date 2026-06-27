@@ -7,19 +7,21 @@ import (
 	"github.com/spacesioberyl/system-v1/internal/crm/dto"
 	"github.com/spacesioberyl/system-v1/internal/crm/model"
 	"github.com/spacesioberyl/system-v1/internal/crm/repository"
+	"github.com/spacesioberyl/system-v1/internal/logger"
 )
 
 type LeadService struct {
-	repo *repository.LeadRepository
+	repo         *repository.LeadRepository
+	followUpRepo *repository.FollowUpRepository
 }
 
-func NewLeadService(repo *repository.LeadRepository) *LeadService {
-	return &LeadService{repo: repo}
+func NewLeadService(repo *repository.LeadRepository, followUpRepo *repository.FollowUpRepository) *LeadService {
+	return &LeadService{repo: repo, followUpRepo: followUpRepo}
 }
 
 // validLeadStatuses defines the state machine for leads
 var validLeadStatuses = map[string]bool{
-	"new": true, "first_call": true, "pdf_sent": true, "sample_sent": true,
+	"new": true, "contacted": true, "pdf_sent": true, "sample_sent": true,
 	"site_visit": true, "negotiation": true, "finalized": true, "lost": true,
 }
 
@@ -61,7 +63,18 @@ func (s *LeadService) UpdateStatus(ctx context.Context, leadID int, req dto.Upda
 	if req.LostReason != "" {
 		lostReason = &req.LostReason
 	}
-	return s.repo.UpdateStatus(ctx, leadID, req.Status, lostReason)
+	
+	if err := s.repo.UpdateStatus(ctx, leadID, req.Status, lostReason); err != nil {
+		return err
+	}
+
+	if req.Status == "lost" {
+		if err := s.followUpRepo.CancelPendingForLead(ctx, leadID); err != nil {
+			logger.Log.Error("Failed to cancel pending follow-ups for lost lead", "lead_id", leadID, "error", err)
+		}
+	}
+
+	return nil
 }
 
 func (s *LeadService) Assign(ctx context.Context, leadID, assignedTo int) error {

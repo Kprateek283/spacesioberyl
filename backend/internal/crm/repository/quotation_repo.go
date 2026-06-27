@@ -120,6 +120,34 @@ func (r *QuotationRepository) GetByID(ctx context.Context, id int) (*model.Quota
 		}
 		return nil, err
 	}
+
+	// Fetch line items
+	itemsQuery := `
+		SELECT id, quotation_id, item_name, description, quantity, unit_price, total_price
+		FROM quotation_line_items WHERE quotation_id = $1
+	`
+	rows, err := r.db.Query(ctx, itemsQuery, id)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var items []*model.QuotationLineItem
+	for rows.Next() {
+		var item model.QuotationLineItem
+		if err := rows.Scan(
+			&item.ID, &item.QuotationID, &item.ItemName, &item.Description,
+			&item.Quantity, &item.UnitPrice, &item.TotalPrice,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, &item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	q.LineItems = items
+
 	return &q, nil
 }
 

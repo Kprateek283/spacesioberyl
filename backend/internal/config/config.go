@@ -21,6 +21,7 @@ type Config struct {
 	MinIOSecretKey string
 	MinIOBucket    string
 	MinIOUseSSL    bool
+	MinIOPublicURL string
 
 	// WhatsApp (Meta Cloud API)
 	WhatsAppToken              string
@@ -36,7 +37,7 @@ func Load() *Config {
 		DatabaseURL: getEnv("DATABASE_URL", "postgres://admin:securepassword@system_db:5432/erp_v1?sslmode=disable"),
 		RedisURL:    getEnv("REDIS_URL", "redis://system_cache:6379/0"),
 		RabbitMQURL: getEnv("RABBITMQ_URL", "amqp://guest:guest@system_mq:5672/"),
-		JWTSecret:   getEnv("JWT_SECRET", "secret"),
+		JWTSecret:   getEnv("JWT_SECRET", ""),
 
 		OfficeIP: getEnv("OFFICE_IP", "0.0.0.0"), // 0.0.0.0 = dev mode (all IPs accepted)
 
@@ -45,6 +46,7 @@ func Load() *Config {
 		MinIOSecretKey: getEnv("MINIO_SECRET_KEY", "securepassword"),
 		MinIOBucket:    getEnv("MINIO_BUCKET", "crm-files"),
 		MinIOUseSSL:    getEnv("MINIO_USE_SSL", "false") == "true",
+		MinIOPublicURL: getEnv("MINIO_PUBLIC_URL", "http://localhost:9000"),
 
 		WhatsAppToken:             getEnv("WHATSAPP_TOKEN", ""),
 		WhatsAppPhoneID:           getEnv("WHATSAPP_PHONE_ID", ""),

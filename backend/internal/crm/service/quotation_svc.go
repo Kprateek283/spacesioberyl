@@ -14,6 +14,7 @@ import (
 	"github.com/spacesioberyl/system-v1/internal/crm/dto"
 	"github.com/spacesioberyl/system-v1/internal/crm/model"
 	"github.com/spacesioberyl/system-v1/internal/crm/repository"
+	"github.com/spacesioberyl/system-v1/internal/middleware"
 	"github.com/spacesioberyl/system-v1/internal/storage"
 )
 
@@ -27,6 +28,10 @@ func NewQuotationService(repo *repository.QuotationRepository) *QuotationService
 
 // Create handles line-item math, quotation persistence, and PDF generation/upload.
 func (s *QuotationService) Create(ctx context.Context, leadID, userID int, req dto.CreateQuotationRequest) (*model.Quotation, error) {
+	if req.PaymentTermType == "cash" && !middleware.GetGhostMode(ctx) {
+		return nil, errors.New("cash payment terms require ghost mode to be enabled")
+	}
+
 	if len(req.LineItems) == 0 {
 		return nil, errors.New("at least one line item is required")
 	}

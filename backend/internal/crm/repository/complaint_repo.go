@@ -144,14 +144,14 @@ func (r *ComplaintRepository) UpdateStatus(ctx context.Context, complaintID int,
 
 // EscalateOld marks complaints that are unresolved past a threshold as 'escalated'.
 // Used by the background worker/cron job.
-func (r *ComplaintRepository) EscalateOld(ctx context.Context, thresholdDays int) (int64, error) {
+func (r *ComplaintRepository) EscalateOld(ctx context.Context, thresholdHours int) (int64, error) {
 	query := `
 		UPDATE client_complaints
 		SET status = 'escalated', escalated_at = NOW(), updated_at = CURRENT_TIMESTAMP
 		WHERE status NOT IN ('resolved', 'escalated')
-		  AND created_at < NOW() - ($1 || ' days')::INTERVAL
+		  AND created_at < NOW() - ($1 || ' hours')::INTERVAL
 	`
-	tag, err := r.db.Exec(ctx, query, fmt.Sprintf("%d", thresholdDays))
+	tag, err := r.db.Exec(ctx, query, fmt.Sprintf("%d", thresholdHours))
 	if err != nil {
 		return 0, err
 	}

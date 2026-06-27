@@ -1,27 +1,25 @@
 package handler
 
 import (
-	"context"
+
 	"encoding/json"
 	"net/http"
 	"strconv"
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/spacesioberyl/system-v1/internal/broker"
-	"github.com/spacesioberyl/system-v1/internal/logger"
 	"github.com/spacesioberyl/system-v1/internal/logistics/dto"
 	"github.com/spacesioberyl/system-v1/internal/logistics/model"
-	"github.com/spacesioberyl/system-v1/internal/logistics/repository"
+	"github.com/spacesioberyl/system-v1/internal/logistics/service"
 	"github.com/spacesioberyl/system-v1/internal/middleware"
 )
 
 type LogisticsHandler struct {
-	repo *repository.LogisticsRepository
+	svc service.LogisticsService
 }
 
-func NewLogisticsHandler(repo *repository.LogisticsRepository) *LogisticsHandler {
-	return &LogisticsHandler{repo: repo}
+func NewLogisticsHandler(svc service.LogisticsService) *LogisticsHandler {
+	return &LogisticsHandler{svc: svc}
 }
 
 func sendLogError(w http.ResponseWriter, status int, msg string) {
@@ -58,7 +56,7 @@ func (h *LogisticsHandler) CreateVendor(w http.ResponseWriter, r *http.Request) 
 		vendor.Address = &req.Address
 	}
 
-	result, err := h.repo.CreateVendor(r.Context(), vendor)
+	result, err := h.svc.CreateVendor(r.Context(), vendor)
 	if err != nil {
 		sendLogError(w, http.StatusInternalServerError, "Failed to create vendor")
 		return
@@ -70,7 +68,7 @@ func (h *LogisticsHandler) CreateVendor(w http.ResponseWriter, r *http.Request) 
 }
 
 func (h *LogisticsHandler) ListVendors(w http.ResponseWriter, r *http.Request) {
-	vendors, err := h.repo.ListVendors(r.Context())
+	vendors, err := h.svc.ListVendors(r.Context())
 	if err != nil {
 		sendLogError(w, http.StatusInternalServerError, "Failed to fetch vendors")
 		return
@@ -80,8 +78,12 @@ func (h *LogisticsHandler) ListVendors(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *LogisticsHandler) GetVendor(w http.ResponseWriter, r *http.Request) {
-	id, _ := strconv.Atoi(chi.URLParam(r, "id"))
-	vendor, err := h.repo.GetVendorByID(r.Context(), id)
+	id, err := strconv.Atoi(chi.URLParam(r, "id"))
+	if err != nil {
+		sendLogError(w, http.StatusBadRequest, "Invalid vendor ID")
+		return
+	}
+	vendor, err := h.svc.GetVendorByID(r.Context(), id)
 	if err != nil {
 		sendLogError(w, http.StatusNotFound, err.Error())
 		return
@@ -95,7 +97,7 @@ func (h *LogisticsHandler) GetVendor(w http.ResponseWriter, r *http.Request) {
 // =====================================================
 
 func (h *LogisticsHandler) ListOrders(w http.ResponseWriter, r *http.Request) {
-	orders, err := h.repo.ListOrders(r.Context())
+	orders, err := h.svc.ListOrders(r.Context())
 	if err != nil {
 		sendLogError(w, http.StatusInternalServerError, "Failed to fetch orders")
 		return
@@ -105,13 +107,17 @@ func (h *LogisticsHandler) ListOrders(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *LogisticsHandler) AssignOrderManager(w http.ResponseWriter, r *http.Request) {
-	id, _ := strconv.Atoi(chi.URLParam(r, "id"))
+	id, err := strconv.Atoi(chi.URLParam(r, "id"))
+	if err != nil {
+		sendLogError(w, http.StatusBadRequest, "Invalid order ID")
+		return
+	}
 	var req dto.AssignOrderManagerRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		sendLogError(w, http.StatusBadRequest, "Invalid request payload")
 		return
 	}
-	if err := h.repo.AssignOrderManager(r.Context(), id, req.OperationsManagerID); err != nil {
+	if err := h.svc.AssignOrderManager(r.Context(), id, req.OperationsManagerID); err != nil {
 		sendLogError(w, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -130,7 +136,11 @@ func (h *LogisticsHandler) CreatePurchaseOrder(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	orderID, _ := strconv.Atoi(chi.URLParam(r, "id"))
+	orderID, err := strconv.Atoi(chi.URLParam(r, "id"))
+	if err != nil {
+		sendLogError(w, http.StatusBadRequest, "Invalid order ID")
+		return
+	}
 	var req dto.CreatePurchaseOrderRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		sendLogError(w, http.StatusBadRequest, "Invalid request payload")
@@ -152,7 +162,7 @@ func (h *LogisticsHandler) CreatePurchaseOrder(w http.ResponseWriter, r *http.Re
 		po.ExpectedDeliveryDate = &t
 	}
 
-	result, err := h.repo.CreatePurchaseOrder(r.Context(), po)
+	result, err := h.svc.CreatePurchaseOrder(r.Context(), po)
 	if err != nil {
 		sendLogError(w, http.StatusInternalServerError, "Failed to create purchase order")
 		return
@@ -189,7 +199,7 @@ func (h *LogisticsHandler) CreateDispatch(w http.ResponseWriter, r *http.Request
 		d.TransportPhone = &req.TransportPhone
 	}
 
-	result, err := h.repo.CreateDispatch(r.Context(), d)
+	result, err := h.svc.CreateDispatch(r.Context(), d)
 	if err != nil {
 		sendLogError(w, http.StatusInternalServerError, "Failed to create dispatch")
 		return
@@ -207,7 +217,7 @@ func (h *LogisticsHandler) GetMyDispatches(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	dispatches, err := h.repo.GetMyDispatches(r.Context(), claims.UserID)
+	dispatches, err := h.svc.GetMyDispatches(r.Context(), claims.UserID)
 	if err != nil {
 		sendLogError(w, http.StatusInternalServerError, "Failed to fetch dispatches")
 		return
@@ -217,7 +227,11 @@ func (h *LogisticsHandler) GetMyDispatches(w http.ResponseWriter, r *http.Reques
 }
 
 func (h *LogisticsHandler) LogDispatchTimestamp(w http.ResponseWriter, r *http.Request) {
-	id, _ := strconv.Atoi(chi.URLParam(r, "id"))
+	id, err := strconv.Atoi(chi.URLParam(r, "id"))
+	if err != nil {
+		sendLogError(w, http.StatusBadRequest, "Invalid dispatch ID")
+		return
+	}
 	var req dto.LogDispatchTimestampRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		sendLogError(w, http.StatusBadRequest, "Invalid request payload")
@@ -232,39 +246,10 @@ func (h *LogisticsHandler) LogDispatchTimestamp(w http.ResponseWriter, r *http.R
 		notes = &req.Notes
 	}
 
-	if err := h.repo.LogDispatchTimestamp(r.Context(), id, req.Type, challanURL, notes); err != nil {
+	if err := h.svc.LogDispatchTimestamp(r.Context(), id, req.Type, challanURL, notes); err != nil {
 		sendLogError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-
-	// Best-effort WhatsApp notification — do not block the HTTP response
-	go func() {
-		ctx := context.Background()
-		phone, clientName, err := h.repo.GetClientInfoByDispatchID(ctx, id)
-		if err != nil {
-			logger.Log.Warn("WhatsApp: failed to look up client info for dispatch", "dispatch_id", id, "error", err)
-			return
-		}
-
-		var status, details string
-		switch req.Type {
-		case "dispatch":
-			status = "Order Dispatched"
-			details = "Your materials have been dispatched and are on the way."
-		case "delivery":
-			status = "Order Delivered"
-			details = "Your materials have been delivered successfully."
-		}
-
-		vars := map[string]string{
-			"1": clientName,
-			"2": status,
-			"3": details,
-		}
-		if err := broker.PublishWhatsAppNotification(ctx, phone, "status_update", vars); err != nil {
-			logger.Log.Error("WhatsApp: failed to publish notification", "dispatch_id", id, "error", err)
-		}
-	}()
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(dto.BasicResponse{Message: "Timestamp logged"})

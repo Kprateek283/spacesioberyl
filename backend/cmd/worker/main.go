@@ -22,9 +22,9 @@ import (
 
 // CONFIGURABLE THRESHOLDS (adjust these as needed)
 const (
-	// ComplaintEscalationDays is the number of days after which an unresolved complaint is auto-escalated.
-	// Default: 3 days. Change this value if the business policy changes.
-	ComplaintEscalationDays = 3
+	// ComplaintEscalationHours is the number of hours after which an unresolved complaint is auto-escalated.
+	// Default: 48 hours. Change this value if the business policy changes.
+	ComplaintEscalationHours = 48
 
 	// FollowUpMissedHours is the number of hours past the scheduled time after which a follow-up is marked as missed.
 	// Default: 24 hours. Change this value if the business policy changes.
@@ -111,7 +111,14 @@ type QuoteApprovedEvent struct {
 }
 
 func consumeQuoteApproved(logisticsRepo *logRepo.LogisticsRepository) {
-	msgs, err := broker.Channel.Consume(broker.QueueQuoteApproved, "worker-quote", true, false, false, false, nil)
+	ch, err := broker.Conn.Channel()
+	if err != nil {
+		logger.Log.Error("Failed to open channel for quote_approved consumer", "error", err)
+		return
+	}
+	defer ch.Close()
+
+	msgs, err := ch.Consume(broker.QueueQuoteApproved, "worker-quote", false, false, false, false, nil)
 	if err != nil {
 		logger.Log.Error("Failed to start consuming quote_approved queue", "error", err)
 		return
@@ -128,6 +135,7 @@ func processQuoteApproved(msg amqp.Delivery, logisticsRepo *logRepo.LogisticsRep
 	var event QuoteApprovedEvent
 	if err := json.Unmarshal(msg.Body, &event); err != nil {
 		logger.Log.Error("Failed to unmarshal quote_approved event", "error", err)
+		msg.Nack(false, false)
 		return
 	}
 
@@ -137,10 +145,12 @@ func processQuoteApproved(msg amqp.Delivery, logisticsRepo *logRepo.LogisticsRep
 	orderID, err := logisticsRepo.CreateOrderFromQuotation(context.Background(), event.QuotationID, event.LeadID, event.PaymentTermType)
 	if err != nil {
 		logger.Log.Error("Failed to create order from quotation", "quotation_id", event.QuotationID, "error", err)
+		msg.Nack(false, true)
 		return
 	}
 
 	logger.Log.Info("✅ Order created from approved quotation", "order_id", orderID, "quotation_id", event.QuotationID)
+	msg.Ack(false)
 }
 
 // =====================================================
@@ -153,7 +163,14 @@ type InstallationSignoffEvent struct {
 }
 
 func consumeInstallationSignoff(dbPool *pgxpool.Pool) {
-	msgs, err := broker.Channel.Consume(broker.QueueInstallationSignoff, "worker-signoff", true, false, false, false, nil)
+	ch, err := broker.Conn.Channel()
+	if err != nil {
+		logger.Log.Error("Failed to open channel for installation_signoff consumer", "error", err)
+		return
+	}
+	defer ch.Close()
+
+	msgs, err := ch.Consume(broker.QueueInstallationSignoff, "worker-signoff", true, false, false, false, nil)
 	if err != nil {
 		logger.Log.Error("Failed to start consuming installation_signoff queue", "error", err)
 		return
@@ -226,13 +243,13 @@ func runCronJob(name string, intervalMinutes int, job func()) {
 }
 
 func escalateComplaints(repo *crmRepo.ComplaintRepository) {
-	count, err := repo.EscalateOld(context.Background(), ComplaintEscalationDays)
+	count, err := repo.EscalateOld(context.Background(), ComplaintEscalationHours)
 	if err != nil {
 		logger.Log.Error("Complaint escalation failed", "error", err)
 		return
 	}
 	if count > 0 {
-		logger.Log.Info("🔴 Complaints escalated", "count", count, "threshold_days", ComplaintEscalationDays)
+		logger.Log.Info("🔴 Complaints escalated", "count", count, "threshold_hours", ComplaintEscalationHours)
 	}
 }
 

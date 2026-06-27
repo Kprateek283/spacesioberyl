@@ -16,8 +16,11 @@ var Client *minio.Client
 // DefaultBucket is the bucket name for CRM files (PDFs, receipts, photos)
 var DefaultBucket string
 
+// PublicURL is the base URL accessible by external clients
+var PublicURL string
+
 // InitMinIO initializes the global MinIO S3-compatible client
-func InitMinIO(endpoint, accessKey, secretKey, bucket string, useSSL bool) error {
+func InitMinIO(endpoint, accessKey, secretKey, bucket string, useSSL bool, publicURL string) error {
 	client, err := minio.New(endpoint, &minio.Options{
 		Creds:  credentials.NewStaticV4(accessKey, secretKey, ""),
 		Secure: useSSL,
@@ -28,6 +31,7 @@ func InitMinIO(endpoint, accessKey, secretKey, bucket string, useSSL bool) error
 
 	Client = client
 	DefaultBucket = bucket
+	PublicURL = publicURL
 	logger.Log.Info("Connected to MinIO successfully", "endpoint", endpoint, "bucket", bucket)
 	return nil
 }
@@ -43,6 +47,6 @@ func UploadFile(ctx context.Context, objectName string, reader io.Reader, size i
 	}
 
 	// Build the public URL (works because minio-setup sets the bucket to public)
-	url := fmt.Sprintf("http://%s/%s/%s", Client.EndpointURL().Host, DefaultBucket, objectName)
+	url := fmt.Sprintf("%s/%s/%s", PublicURL, DefaultBucket, objectName)
 	return url, nil
 }

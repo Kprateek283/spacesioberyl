@@ -1,7 +1,10 @@
 package iam
 
 import (
+	"time"
+
 	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/httprate"
 
 	// We will implement these packages in the upcoming steps
 	"github.com/spacesioberyl/system-v1/internal/iam/handler"
@@ -17,7 +20,7 @@ func RegisterRoutes(r chi.Router, h *handler.IAMHandler) {
 		// ---------------------------------------------------------
 		// 1. PUBLIC ROUTES (No Token Required)
 		// ---------------------------------------------------------
-		r.Post("/login", h.Login)
+		r.With(httprate.LimitByIP(5, 1*time.Minute)).Post("/login", h.Login)
 		r.Post("/refresh", h.RefreshToken)
 		r.Post("/password/forgot", h.ForgotPassword)
 		r.Post("/password/reset", h.ResetPassword)
@@ -36,12 +39,12 @@ func RegisterRoutes(r chi.Router, h *handler.IAMHandler) {
 
 			// Ghost Mode: PIN-based Authentication
 			r.Route("/iam", func(r chi.Router) {
-				r.Post("/verify-pin", h.VerifyPin)
+				r.With(httprate.LimitByIP(5, 1*time.Minute)).Post("/verify-pin", h.VerifyPin)
 
 				// Super Admin only: PIN setup
 				r.Group(func(r chi.Router) {
 					r.Use(middleware.RequireRole("super_admin"))
-					r.Post("/setup-pins", h.SetupPins)
+					r.With(httprate.LimitByIP(5, 1*time.Minute)).Post("/setup-pins", h.SetupPins)
 				})
 			})
 

@@ -80,6 +80,17 @@ func (r *FollowUpRepository) MarkMissed(ctx context.Context, thresholdHours int)
 	return tag.RowsAffected(), nil
 }
 
+// CancelPendingForLead marks all pending follow-ups for a lead as 'cancelled'.
+func (r *FollowUpRepository) CancelPendingForLead(ctx context.Context, leadID int) error {
+	query := `
+		UPDATE follow_ups
+		SET status = 'cancelled'
+		WHERE lead_id = $1 AND status = 'pending'
+	`
+	_, err := r.db.Exec(ctx, query, leadID)
+	return err
+}
+
 func (r *FollowUpRepository) scanFollowUps(ctx context.Context, query string, args ...interface{}) ([]*model.FollowUp, error) {
 	rows, err := r.db.Query(ctx, query, args...)
 	if err != nil {

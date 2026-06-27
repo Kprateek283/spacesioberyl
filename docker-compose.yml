@@ -1,7 +1,7 @@
 services:
   postgres:
     image: postgres:17-alpine
-    container_name: system_db
+    # container_name: system_db
     restart: always
     environment:
       POSTGRES_USER: admin
@@ -14,7 +14,7 @@ services:
 
   redis:
     image: redis:7-alpine
-    container_name: system_cache
+    # container_name: system_cache
     restart: always
     ports:
       - "6380:6379"
@@ -24,7 +24,7 @@ services:
 
   rabbitmq:
     image: rabbitmq:3-management-alpine
-    container_name: system_mq
+    # container_name: system_mq
     restart: always
     ports:
       - "5672:5672"   # AMQP protocol port
@@ -34,7 +34,7 @@ services:
 
   minio:
     image: minio/minio:latest
-    container_name: system_storage
+    # container_name: system_storage
     restart: always
     ports:
       - "9001:9000" # API Port (S3 Compatible)
@@ -48,7 +48,7 @@ services:
 
   minio-setup:
     image: minio/mc:latest
-    container_name: system_storage_setup
+    # container_name: system_storage_setup
     depends_on:
       - minio
     entrypoint: >
@@ -64,7 +64,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile.api
-    container_name: system_api
+    # container_name: system_api
     restart: always
     ports:
       - "8080:8080"
@@ -82,7 +82,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile.worker
-    container_name: system_worker
+    # container_name: system_worker
     restart: always
     volumes:
       - ./logs:/app/logs

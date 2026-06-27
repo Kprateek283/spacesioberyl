@@ -38,6 +38,7 @@ import (
 	logisticsModule "github.com/spacesioberyl/system-v1/internal/logistics"
 	logHandler "github.com/spacesioberyl/system-v1/internal/logistics/handler"
 	logRepo "github.com/spacesioberyl/system-v1/internal/logistics/repository"
+	logService "github.com/spacesioberyl/system-v1/internal/logistics/service"
 
 	// Module 5: Execution
 	executionModule "github.com/spacesioberyl/system-v1/internal/execution"
@@ -147,7 +148,7 @@ func (a *Application) registerCRM() {
 	quotationRepo := crmRepo.NewQuotationRepository(a.DB)
 	complaintRepo := crmRepo.NewComplaintRepository(a.DB)
 
-	leadSvc := crmService.NewLeadService(leadRepo)
+	leadSvc := crmService.NewLeadService(leadRepo, followUpRepo)
 	followUpSvc := crmService.NewFollowUpService(followUpRepo)
 	quotationSvc := crmService.NewQuotationService(quotationRepo)
 	complaintSvc := crmService.NewComplaintService(complaintRepo)
@@ -163,7 +164,8 @@ func (a *Application) registerCRM() {
 
 func (a *Application) registerLogistics() {
 	repo := logRepo.NewLogisticsRepository(a.DB)
-	handler := logHandler.NewLogisticsHandler(repo)
+	svc := logService.NewLogisticsService(repo)
+	handler := logHandler.NewLogisticsHandler(svc)
 	logisticsModule.RegisterRoutes(a.Router, handler)
 	logger.Log.Info("Module 4 (Logistics) registered")
 }

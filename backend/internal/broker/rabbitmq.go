@@ -55,7 +55,13 @@ func PublishEvent(ctx context.Context, queueName string, payload interface{}) er
 		return fmt.Errorf("failed to marshal event payload: %w", err)
 	}
 
-	err = Channel.PublishWithContext(ctx, "", queueName, false, false, amqp.Publishing{
+	ch, err := Conn.Channel()
+	if err != nil {
+		return fmt.Errorf("failed to open a channel: %w", err)
+	}
+	defer ch.Close()
+
+	err = ch.PublishWithContext(ctx, "", queueName, false, false, amqp.Publishing{
 		ContentType: "application/json",
 		Body:        body,
 	})

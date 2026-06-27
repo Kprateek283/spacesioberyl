@@ -31,7 +31,7 @@ type User struct {
 	ID           int        `db:"id"`
 	Name         string     `db:"name"`
 	Email        string     `db:"email"`
-	PasswordHash string     `db:"password_hash"` // Never exposed in JSON
+	PasswordHash string     `db:"password_hash" json:"-"` // Never exposed in JSON
 	RoleID       int        `db:"role_id"`
 	Department   Department `db:"department"`
 	IsActive     bool       `db:"is_active"`
@@ -39,8 +39,8 @@ type User struct {
 	UpdatedAt    time.Time  `db:"updated_at"`
 
 	// Ghost Mode: Dual-PIN fields (nullable — only Super Admin uses these)
-	PinHash             *string `db:"pin_hash"`
-	HighSecurityPinHash *string `db:"high_security_pin_hash"`
+	PinHash             *string `db:"pin_hash" json:"-"`
+	HighSecurityPinHash *string `db:"high_security_pin_hash" json:"-"`
 
 	// Joined field: Used when we fetch a user and join the roles table
 	RoleName RoleName `db:"role_name"`

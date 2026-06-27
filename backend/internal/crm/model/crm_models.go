@@ -48,6 +48,7 @@ type Quotation struct {
 	IsCustomPdf        bool            `json:"is_custom_pdf" db:"is_custom_pdf"`
 	CreatedAt          time.Time       `json:"created_at" db:"created_at"`
 	UpdatedAt          time.Time       `json:"updated_at" db:"updated_at"`
+	LineItems          []*QuotationLineItem `json:"line_items,omitempty" db:"-"`
 }
 
 // QuotationLineItem represents the 'quotation_line_items' table

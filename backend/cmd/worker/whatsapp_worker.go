@@ -23,7 +23,14 @@ func consumeWhatsApp(cfg *config.Config) {
 		return
 	}
 
-	msgs, err := broker.Channel.Consume(broker.QueueWhatsApp, "worker-whatsapp", true, false, false, false, nil)
+	ch, err := broker.Conn.Channel()
+	if err != nil {
+		logger.Log.Error("Failed to open channel for whatsapp consumer", "error", err)
+		return
+	}
+	defer ch.Close()
+
+	msgs, err := ch.Consume(broker.QueueWhatsApp, "worker-whatsapp", true, false, false, false, nil)
 	if err != nil {
 		logger.Log.Error("Failed to start consuming whatsapp_queue", "error", err)
 		return

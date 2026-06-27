@@ -102,7 +102,11 @@ func (h *ExecutionHandler) GetMyJobs(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *ExecutionHandler) CreateInstallation(w http.ResponseWriter, r *http.Request) {
-	orderID, _ := strconv.Atoi(chi.URLParam(r, "id"))
+	orderID, err := strconv.Atoi(chi.URLParam(r, "id"))
+	if err != nil {
+		sendExecError(w, http.StatusBadRequest, "Invalid order ID")
+		return
+	}
 	var req dto.CreateInstallationRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		sendExecError(w, http.StatusBadRequest, "Invalid request payload")
@@ -121,7 +125,11 @@ func (h *ExecutionHandler) CreateInstallation(w http.ResponseWriter, r *http.Req
 }
 
 func (h *ExecutionHandler) AssignInstaller(w http.ResponseWriter, r *http.Request) {
-	jobID, _ := strconv.Atoi(chi.URLParam(r, "id"))
+	jobID, err := strconv.Atoi(chi.URLParam(r, "id"))
+	if err != nil {
+		sendExecError(w, http.StatusBadRequest, "Invalid job ID")
+		return
+	}
 	var req dto.AssignInstallerRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		sendExecError(w, http.StatusBadRequest, "Invalid request payload")
@@ -148,7 +156,11 @@ func (h *ExecutionHandler) SyncUpdates(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	jobID, _ := strconv.Atoi(chi.URLParam(r, "id"))
+	jobID, err := strconv.Atoi(chi.URLParam(r, "id"))
+	if err != nil {
+		sendExecError(w, http.StatusBadRequest, "Invalid job ID")
+		return
+	}
 	var req dto.BulkSyncUpdatesRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		sendExecError(w, http.StatusBadRequest, "Invalid request payload")
@@ -195,7 +207,11 @@ func (h *ExecutionHandler) SyncUpdates(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *ExecutionHandler) GetUpdates(w http.ResponseWriter, r *http.Request) {
-	jobID, _ := strconv.Atoi(chi.URLParam(r, "id"))
+	jobID, err := strconv.Atoi(chi.URLParam(r, "id"))
+	if err != nil {
+		sendExecError(w, http.StatusBadRequest, "Invalid job ID")
+		return
+	}
 	updates, err := h.repo.GetUpdates(r.Context(), jobID)
 	if err != nil {
 		sendExecError(w, http.StatusInternalServerError, "Failed to fetch updates")
@@ -210,7 +226,11 @@ func (h *ExecutionHandler) GetUpdates(w http.ResponseWriter, r *http.Request) {
 // =====================================================
 
 func (h *ExecutionHandler) Signoff(w http.ResponseWriter, r *http.Request) {
-	jobID, _ := strconv.Atoi(chi.URLParam(r, "id"))
+	jobID, err := strconv.Atoi(chi.URLParam(r, "id"))
+	if err != nil {
+		sendExecError(w, http.StatusBadRequest, "Invalid job ID")
+		return
+	}
 	var req dto.SignoffRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		sendExecError(w, http.StatusBadRequest, "Invalid request payload")

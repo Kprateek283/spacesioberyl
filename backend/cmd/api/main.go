@@ -48,7 +48,7 @@ func main() {
 	defer broker.Channel.Close()
 
 	// 5. Initialize MinIO Storage
-	if err := storage.InitMinIO(cfg.MinIOEndpoint, cfg.MinIOAccessKey, cfg.MinIOSecretKey, cfg.MinIOBucket, cfg.MinIOUseSSL); err != nil {
+	if err := storage.InitMinIO(cfg.MinIOEndpoint, cfg.MinIOAccessKey, cfg.MinIOSecretKey, cfg.MinIOBucket, cfg.MinIOUseSSL, cfg.MinIOPublicURL); err != nil {
 		// MinIO failure is non-fatal — quotation PDFs will fail but the API will still run
 		logger.Log.Error("MinIO initialization failed (PDF generation will be unavailable)", "error", err)
 	}
