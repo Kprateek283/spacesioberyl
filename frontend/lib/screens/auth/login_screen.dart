@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/utils/ui_feedback.dart';
+import '../../core/network/api_client.dart';
 import '../../features/auth/providers/auth_provider.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
@@ -11,9 +12,9 @@ class LoginScreen extends ConsumerStatefulWidget {
 }
 
 class _LoginScreenState extends ConsumerState<LoginScreen> {
+  final _formKey = GlobalKey<FormState>();
   final _loginIdController = TextEditingController();
   final _passwordController = TextEditingController();
-  bool _keepSignedIn = false;
 
   @override
   void dispose() {
@@ -23,6 +24,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 
   void _handleLogin() async {
+    if (!_formKey.currentState!.validate()) return;
     try {
       await ref.read(authProvider.notifier).login(
         _loginIdController.text.trim(),
@@ -36,6 +38,130 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         UiFeedback.parsedError(context, e);
       }
     }
+  }
+
+  void _showForgotPasswordDialog(BuildContext context) {
+    final emailCtrl = TextEditingController();
+    bool loading = false;
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setState) => AlertDialog(
+          title: const Text('Reset Password'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('Enter your email to receive an OTP.'),
+              const SizedBox(height: 12),
+              TextField(
+                controller: emailCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'Email',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: loading
+                  ? null
+                  : () async {
+                      if (emailCtrl.text.isEmpty) return;
+                      setState(() => loading = true);
+                      try {
+                        final api = ref.read(apiClientProvider);
+                        await api.post('/password/forgot', data: {'email': emailCtrl.text.trim()});
+                        if (ctx.mounted) {
+                          Navigator.pop(ctx);
+                          _showResetPasswordDialog(context, emailCtrl.text.trim());
+                        }
+                      } catch (e) {
+                        setState(() => loading = false);
+                        if (ctx.mounted) {
+                          UiFeedback.parsedError(context, e);
+                        }
+                      }
+                    },
+              child: loading ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('Send OTP'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showResetPasswordDialog(BuildContext context, String email) {
+    final otpCtrl = TextEditingController();
+    final newPasswordCtrl = TextEditingController();
+    bool loading = false;
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setState) => AlertDialog(
+          title: const Text('Reset Password'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('Enter the OTP sent to your email and your new password.'),
+              const SizedBox(height: 12),
+              TextField(
+                controller: otpCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'OTP',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: newPasswordCtrl,
+                obscureText: true,
+                decoration: const InputDecoration(
+                  labelText: 'New Password',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: loading
+                  ? null
+                  : () async {
+                      if (otpCtrl.text.isEmpty || newPasswordCtrl.text.isEmpty) return;
+                      setState(() => loading = true);
+                      try {
+                        final api = ref.read(apiClientProvider);
+                        await api.post('/password/reset', data: {
+                          'email': email,
+                          'token': otpCtrl.text.trim(),
+                          'new_password': newPasswordCtrl.text,
+                        });
+                        if (ctx.mounted) {
+                          Navigator.pop(ctx);
+                          UiFeedback.success(context, 'Password reset successfully. You can now log in.');
+                        }
+                      } catch (e) {
+                        setState(() => loading = false);
+                        if (ctx.mounted) {
+                          UiFeedback.parsedError(context, e);
+                        }
+                      }
+                    },
+              child: loading ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('Reset Password'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -83,14 +209,17 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 24, offset: const Offset(0, 4)),
                     ],
                   ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Email / Username
-                      const Text('Email / Username', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
+                  child: Form(
+                    key: _formKey,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Email / Username
+                        const Text('Email / Username', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
                       const SizedBox(height: 8),
                       TextFormField(
                         controller: _loginIdController,
+                        validator: (v) => v == null || v.isEmpty ? 'Required' : null,
                         decoration: InputDecoration(
                           prefixIcon: const Icon(Icons.person_outline, size: 20, color: Color(0xFF707883)),
                           hintText: 'Enter your email or corporate ID',
@@ -116,10 +245,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         children: [
                           const Text('Password', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
                           TextButton(
-                            onPressed: () => UiFeedback.info(
-                              context,
-                              'Password reset is not configured yet. Contact your admin.',
-                            ),
+                            onPressed: () {
+                              // We will navigate to a forgot password dialog or screen
+                              _showForgotPasswordDialog(context);
+                            },
                             style: TextButton.styleFrom(
                               padding: EdgeInsets.zero,
                               minimumSize: Size.zero,
@@ -133,6 +262,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       TextFormField(
                         controller: _passwordController,
                         obscureText: true,
+                        validator: (v) => v == null || v.isEmpty ? 'Required' : null,
                         decoration: InputDecoration(
                           prefixIcon: const Icon(Icons.lock_outline, size: 20, color: Color(0xFF707883)),
                           hintText: '••••••••',
@@ -150,24 +280,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         ),
                       ),
                       const SizedBox(height: 16),
-
-                      // Checkbox
-                      Row(
-                        children: [
-                          SizedBox(
-                            height: 24,
-                            width: 24,
-                            child: Checkbox(
-                              value: _keepSignedIn,
-                              activeColor: const Color(0xFF0061a4),
-                              onChanged: (val) => setState(() => _keepSignedIn = val!),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          const Text('Keep me signed in', style: TextStyle(fontSize: 14, color: Color(0xFF404752))),
-                        ],
-                      ),
-                      const SizedBox(height: 24),
 
                       // Login Button
                       SizedBox(
@@ -196,8 +308,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     ],
                   ),
                 ),
+              ),
 
-                // Footer
+              // Footer
                 const Padding(
                   padding: EdgeInsets.only(top: 24),
                   child: Text.rich(

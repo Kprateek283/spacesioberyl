@@ -1,4 +1,5 @@
 // ignore_for_file: use_build_context_synchronously
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
@@ -86,7 +87,7 @@ class _SiteUpdatesScreenState extends ConsumerState<SiteUpdatesScreen> {
                   label: 'Site Photo',
                   onCapture: () async {
                     final photo = await _imagePicker.pickImage(
-                      source: ImageSource.camera,
+                      source: kIsWeb ? ImageSource.gallery : ImageSource.camera,
                       imageQuality: 80,
                     );
                     if (photo != null) {

@@ -236,12 +236,32 @@ class _CrmLeadDetailScreenState extends ConsumerState<CrmLeadDetailScreen> {
                 spacing: 8,
                 children: [
                   ActionChip(
+                    label: const Text('New'),
+                    onPressed: () => _updateStatus('new'),
+                  ),
+                  ActionChip(
                     label: const Text('First Call'),
                     onPressed: () => _updateStatus('first_call'),
                   ),
                   ActionChip(
                     label: const Text('PDF Sent'),
                     onPressed: () => _updateStatus('pdf_sent'),
+                  ),
+                  ActionChip(
+                    label: const Text('Sample Sent'),
+                    onPressed: () => _updateStatus('sample_sent'),
+                  ),
+                  ActionChip(
+                    label: const Text('Site Visit'),
+                    onPressed: () => _updateStatus('site_visit'),
+                  ),
+                  ActionChip(
+                    label: const Text('Negotiation'),
+                    onPressed: () => _updateStatus('negotiation'),
+                  ),
+                  ActionChip(
+                    label: const Text('Finalized'),
+                    onPressed: () => _updateStatus('finalized'),
                   ),
                   ActionChip(
                     label: const Text('Lost'),
