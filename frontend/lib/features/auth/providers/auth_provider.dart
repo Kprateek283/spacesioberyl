@@ -129,7 +129,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
         state = state.copyWith(
           isAuthenticated: true,
-          sessionUnlocked: true, // Login grants immediate session unlock
+          sessionUnlocked: false, // Must enter PIN after login
           userRole: roleName,
           needsPinSetup: requiresPinSetup,
           isLoading: false,
@@ -179,11 +179,12 @@ class AuthNotifier extends StateNotifier<AuthState> {
           await _storage.write(key: 'jwt', value: newToken);
         }
 
-        // Re-evaluate state (this will decode token and set ghost mode from token claims if present)
-        await checkAuthStatus();
-
         // Ensure ghost mode is set if backend explicitly returned it
-        state = state.copyWith(sessionUnlocked: true, isGhostMode: ghostMode);
+        state = state.copyWith(
+          sessionUnlocked: true,
+          isGhostMode: ghostMode,
+          isLoading: false,
+        );
       }
     } catch (e) {
       state = state.copyWith(isLoading: false);
