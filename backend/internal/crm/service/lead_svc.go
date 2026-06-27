@@ -21,7 +21,7 @@ func NewLeadService(repo *repository.LeadRepository, followUpRepo *repository.Fo
 
 // validLeadStatuses defines the state machine for leads
 var validLeadStatuses = map[string]bool{
-	"new": true, "contacted": true, "pdf_sent": true, "sample_sent": true,
+	"new": true, "first_call": true, "pdf_sent": true, "sample_sent": true,
 	"site_visit": true, "negotiation": true, "finalized": true, "lost": true,
 }
 
