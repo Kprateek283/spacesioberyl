@@ -1,66 +1,47 @@
 import 'package:flutter/material.dart';
-import '../../services/auth_service.dart';
-// Note: You will need to import your home screens once created
-import '../staff/staff_home_screen.dart';
-import '../admin/admin_dashboard_screen.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/utils/ui_feedback.dart';
+import '../../features/auth/providers/auth_provider.dart';
 
-class LoginScreen extends StatefulWidget {
+class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
 
   @override
-  State<LoginScreen> createState() => _LoginScreenState();
+  ConsumerState<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
-  final _usernameController = TextEditingController();
+class _LoginScreenState extends ConsumerState<LoginScreen> {
+  final _loginIdController = TextEditingController();
   final _passwordController = TextEditingController();
-  final _authService = AuthService();
-  bool _isLoading = false;
   bool _keepSignedIn = false;
 
+  @override
+  void dispose() {
+    _loginIdController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
   void _handleLogin() async {
-    setState(() => _isLoading = true);
     try {
-      final user = await _authService.login(
-        _usernameController.text.trim(),
+      await ref.read(authProvider.notifier).login(
+        _loginIdController.text.trim(),
         _passwordController.text,
       );
-
-      if (mounted && user != null) {
-        // Safely extract and lowercase the role
-        final role = user['role_name']?.toString().toLowerCase() ?? 'staff';
-
-        if (role == 'staff') {
-          // Route to Staff View
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (_) => const StaffHomeScreen()),
-          );
-        } else {
-          // Route to Admin View (for admin or super_admin)
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (_) => const AdminDashboardScreen()),
-          );
-        }
-      }
+      
+      // Routing is handled automatically by AuthWrapper in main.dart
+      // based on the authState changes. We don't need to pushReplacement here.
     } catch (e) {
       if (mounted) {
-        // Show the backend error cleanly in a red SnackBar
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(e.toString().replaceAll('Exception: ', '')),
-            backgroundColor: const Color(0xFFba1a1a),
-          ),
-        );
+        UiFeedback.parsedError(context, e);
       }
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final authState = ref.watch(authProvider);
+    final isLoading = authState.isLoading;
     return Scaffold(
       backgroundColor: const Color(0xFFFEF9F2), // Tailwind bg-background
       body: Center(
@@ -105,14 +86,14 @@ class _LoginScreenState extends State<LoginScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Username
-                      const Text('Username', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
+                      // Email / Username
+                      const Text('Email / Username', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
                       const SizedBox(height: 8),
                       TextFormField(
-                        controller: _usernameController,
+                        controller: _loginIdController,
                         decoration: InputDecoration(
                           prefixIcon: const Icon(Icons.person_outline, size: 20, color: Color(0xFF707883)),
-                          hintText: 'Enter your corporate ID',
+                          hintText: 'Enter your email or corporate ID',
                           hintStyle: const TextStyle(color: Colors.black38),
                           filled: true,
                           fillColor: Colors.white,
@@ -135,7 +116,10 @@ class _LoginScreenState extends State<LoginScreen> {
                         children: [
                           const Text('Password', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
                           TextButton(
-                            onPressed: () {},
+                            onPressed: () => UiFeedback.info(
+                              context,
+                              'Password reset is not configured yet. Contact your admin.',
+                            ),
                             style: TextButton.styleFrom(
                               padding: EdgeInsets.zero,
                               minimumSize: Size.zero,
@@ -190,14 +174,14 @@ class _LoginScreenState extends State<LoginScreen> {
                         width: double.infinity,
                         height: 48,
                         child: ElevatedButton(
-                          onPressed: _isLoading ? null : _handleLogin,
+                          onPressed: isLoading ? null : _handleLogin,
                           style: ElevatedButton.styleFrom(
                             backgroundColor: const Color(0xFF0061a4),
                             foregroundColor: Colors.white,
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                             elevation: 0,
                           ),
-                          child: _isLoading
+                          child: isLoading
                               ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
                               : const Row(
                             mainAxisAlignment: MainAxisAlignment.center,

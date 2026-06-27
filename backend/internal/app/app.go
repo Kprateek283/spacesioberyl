@@ -14,6 +14,7 @@ import (
 	"github.com/spacesioberyl/system-v1/internal/cache"
 	"github.com/spacesioberyl/system-v1/internal/config"
 	"github.com/spacesioberyl/system-v1/internal/logger"
+	appmiddleware "github.com/spacesioberyl/system-v1/internal/middleware"
 
 	// Module 1: IAM
 	iam "github.com/spacesioberyl/system-v1/internal/iam"
@@ -62,6 +63,7 @@ func New(db *pgxpool.Pool, cfg *config.Config) *Application {
 	app.Router.Use(chimiddleware.Logger)
 	app.Router.Use(chimiddleware.Recoverer)
 	app.Router.Use(chimiddleware.RealIP) // Ensures r.RemoteAddr is the real client IP
+	app.Router.Use(appmiddleware.CORS)
 
 	// System routes
 	app.registerSystemRoutes()
@@ -104,8 +106,8 @@ func (a *Application) handlePing(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]string{
-		"status":  "Event published",
-		"redis":   "last_ping set",
+		"status":   "Event published",
+		"redis":    "last_ping set",
 		"rabbitmq": "sync_queue message sent",
 	})
 }

@@ -1,20 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import '../../services/auth_service.dart';
-import '../../services/hr_service.dart';
-import '../auth/login_screen.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/utils/ui_feedback.dart';
+import '../../features/auth/providers/auth_provider.dart';
+import '../../features/iam/screens/iam_users_screen.dart';
+import '../../features/hr/services/hr_service.dart';
+import '../../shared/widgets/dialog_action_buttons.dart';
+import '../../shared/widgets/dialog_fields.dart';
 
-class AdminDashboardScreen extends StatefulWidget {
+class AdminDashboardScreen extends ConsumerStatefulWidget {
   const AdminDashboardScreen({super.key});
 
   @override
-  State<AdminDashboardScreen> createState() => _AdminDashboardScreenState();
+  ConsumerState<AdminDashboardScreen> createState() =>
+      _AdminDashboardScreenState();
 }
 
-class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
-  final _authService = AuthService();
-  final _hrService = HrService();
-
+class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
   bool _isLoading = true;
   List<dynamic> _reportData = [];
   List<dynamic> _pendingList = []; // Added to store raw pending requests
@@ -34,9 +36,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   Future<void> _loadDashboardData() async {
     setState(() => _isLoading = true);
     try {
+      final hrService = ref.read(hrServiceProvider);
       final results = await Future.wait([
-        _hrService.getDailyReport(),
-        _hrService.getPendingOverrides(),
+        hrService.getDailyReport(),
+        hrService.getPendingOverrides(),
       ]);
 
       final report = results[0] as List<dynamic>;
@@ -45,11 +48,19 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       // Calculate summary metrics
       int present = 0, absent = 0, overrides = 0, offsite = 0;
       for (var user in report) {
-        switch (user['status']) {
-          case 'Present': present++; break;
-          case 'Absent': absent++; break;
-          case 'Pending Override': overrides++; break;
-          case 'Off-site': offsite++; break;
+        switch ((user['status'] ?? '').toString().toLowerCase()) {
+          case 'present':
+            present++;
+            break;
+          case 'absent':
+            absent++;
+            break;
+          case 'pending_override':
+            overrides++;
+            break;
+          case 'off_site':
+            offsite++;
+            break;
         }
       }
 
@@ -66,9 +77,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString()), backgroundColor: Colors.red),
-        );
+        UiFeedback.parsedError(context, e);
         setState(() => _isLoading = false);
       }
     }
@@ -76,16 +85,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
   void _handleApprove(String overrideId) async {
     try {
-      await _hrService.reviewOverride(overrideId, 'approved');
+      await ref.read(hrServiceProvider).reviewOverride(overrideId, 'approved');
       _loadDashboardData();
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Override approved successfully'), backgroundColor: Colors.green),
-        );
+        UiFeedback.success(context, 'Override approved successfully');
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString()), backgroundColor: Colors.red));
+        UiFeedback.parsedError(context, e);
       }
     }
   }
@@ -105,37 +112,42 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     children: [
                       const Text('Please provide a mandatory reason for rejecting this request.'),
                       const SizedBox(height: 16),
-                      TextField(
+                      DialogTextField(
                         controller: reasonController,
+                        labelText: 'Reason for rejection',
                         onChanged: (val) => setModalState(() {}),
-                        decoration: const InputDecoration(
-                          labelText: 'Reason for rejection',
-                          border: OutlineInputBorder(),
-                        ),
                       ),
                     ],
                   ),
                   actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(context),
-                      child: const Text('CANCEL', style: TextStyle(color: Colors.grey)),
-                    ),
-                    ElevatedButton(
-                      onPressed: reasonController.text.trim().isEmpty
+                    DialogActionButtons(
+                      onCancel: () => Navigator.pop(context),
+                      submitText: 'CONFIRM REJECT',
+                      onSubmit: reasonController.text.trim().isEmpty
                           ? null
                           : () async {
-                        Navigator.pop(context);
-                        try {
-                          await _hrService.reviewOverride(overrideId, 'rejected', adminFeedback: reasonController.text.trim());
-                          _loadDashboardData();
-                        } catch (e) {
-                          if (mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString()), backgroundColor: Colors.red));
-                          }
-                        }
-                      },
-                      style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFba1a1a), foregroundColor: Colors.white),
-                      child: const Text('CONFIRM REJECT'),
+                              Navigator.pop(context);
+                              try {
+                                await ref
+                                    .read(hrServiceProvider)
+                                    .reviewOverride(
+                                      overrideId,
+                                      'rejected',
+                                      adminFeedback: reasonController.text.trim(),
+                                    );
+                                _loadDashboardData();
+                                if (mounted) {
+                                  UiFeedback.success(
+                                    context,
+                                    'Override rejected successfully',
+                                  );
+                                }
+                              } catch (e) {
+                                if (mounted) {
+                                  UiFeedback.parsedError(context, e);
+                                }
+                              }
+                            },
                     ),
                   ],
                 );
@@ -183,8 +195,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             IconButton(
               icon: const Icon(Icons.logout, color: Color(0xFF707883)),
               onPressed: () async {
-                await _authService.logout();
-                if (mounted) Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const LoginScreen()));
+                await ref.read(authProvider.notifier).logout();
+                if (mounted) {
+                  setState(() {
+                    _isLoading = false;
+                  });
+                }
               },
             )
           ],
@@ -200,7 +216,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         ),
         floatingActionButton: FloatingActionButton.extended(
           onPressed: () {
-            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Navigate to IAM Create User Screen')));
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const IamUsersScreen()),
+            );
           },
           backgroundColor: const Color(0xFF0061a4),
           foregroundColor: Colors.white,
@@ -296,10 +315,18 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           final request = _pendingList[index];
           // Safely extract JSON keys regardless of Go struct capitalizations
           final id = request['ID'] ?? request['id'];
-          final date = request['AttendanceDate'] ?? request['attendance_date'];
-          final start = request['RequestedStartTime'] ?? request['requested_start_time'];
-          final end = request['RequestedEndTime'] ?? request['requested_end_time'];
-          final reason = request['EmployeeReason'] ?? request['employee_reason'];
+          final date = request['AttendanceDate'] ??
+              request['attendance_date'] ??
+              request['date'];
+          final start = request['RequestedStartTime'] ??
+              request['requested_start_time'] ??
+              request['check_in_time'];
+          final end = request['RequestedEndTime'] ??
+              request['requested_end_time'] ??
+              request['check_out_time'];
+          final reason = request['EmployeeReason'] ??
+              request['employee_reason'] ??
+              request['override_reason'];
 
           return Container(
             padding: const EdgeInsets.all(20),
@@ -390,25 +417,29 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   }
 
   Widget _buildEmployeeRow(Map<String, dynamic> user) {
-    final status = user['status'];
-    final username = user['username'];
+    final rawStatus = (user['status'] ?? '').toString().toLowerCase();
+    final status = _formatStatus(rawStatus);
+    final username = (user['username'] ??
+            user['name'] ??
+            'User #${user['user_id'] ?? user['id'] ?? ''}')
+        .toString();
 
     Color statusColor;
     Color statusBg;
     IconData statusIcon;
 
-    switch (status) {
-      case 'Present':
+    switch (rawStatus) {
+      case 'present':
         statusColor = const Color(0xFF006e1c);
         statusBg = const Color(0xFF91f78e).withOpacity(0.4);
         statusIcon = Icons.check_circle;
         break;
-      case 'Pending Override':
+      case 'pending_override':
         statusColor = const Color(0xFF904d00);
         statusBg = const Color(0xFFffdcc2);
         statusIcon = Icons.error;
         break;
-      case 'Off-site':
+      case 'off_site':
         statusColor = const Color(0xFF0061a4);
         statusBg = const Color(0xFFd1e4ff);
         statusIcon = Icons.flight_takeoff;
@@ -432,7 +463,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(username, style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16, decoration: status == 'Absent' ? TextDecoration.lineThrough : null, color: status == 'Absent' ? const Color(0xFF707883) : Colors.black)),
+                    Text(username, style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16, decoration: rawStatus == 'absent' ? TextDecoration.lineThrough : null, color: rawStatus == 'absent' ? const Color(0xFF707883) : Colors.black)),
                     const SizedBox(height: 4),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
@@ -452,7 +483,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             ],
           ),
           const SizedBox(height: 12),
-          if (status == 'Present')
+          if (rawStatus == 'present')
             Row(
               children: [
                 const Icon(Icons.login, size: 16, color: Color(0xFF707883)),
@@ -478,5 +509,22 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         ],
       ),
     );
+  }
+
+  String _formatStatus(String status) {
+    switch (status) {
+      case 'pending_override':
+        return 'Pending Override';
+      case 'off_site':
+        return 'Off-site';
+      case 'present':
+        return 'Present';
+      case 'absent':
+        return 'Absent';
+      case 'half_day':
+        return 'Half Day';
+      default:
+        return status.replaceAll('_', ' ').trim();
+    }
   }
 }
