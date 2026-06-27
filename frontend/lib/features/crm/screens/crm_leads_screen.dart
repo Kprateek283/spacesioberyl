@@ -137,15 +137,26 @@ class _CrmLeadsScreenState extends ConsumerState<CrmLeadsScreen> {
             child: CustomScrollView(
               slivers: [
                 SliverToBoxAdapter(
-                  child: Padding(
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
                     padding: const EdgeInsets.all(16),
                     child: Row(
                       children: [
                         _buildFilterChip('All', 'all'),
                         const SizedBox(width: 8),
+                        _buildFilterChip('New', 'new'),
+                        const SizedBox(width: 8),
                         _buildFilterChip('First Call', 'first_call'),
                         const SizedBox(width: 8),
                         _buildFilterChip('PDF Sent', 'pdf_sent'),
+                        const SizedBox(width: 8),
+                        _buildFilterChip('Sample Sent', 'sample_sent'),
+                        const SizedBox(width: 8),
+                        _buildFilterChip('Site Visit', 'site_visit'),
+                        const SizedBox(width: 8),
+                        _buildFilterChip('Negotiation', 'negotiation'),
+                        const SizedBox(width: 8),
+                        _buildFilterChip('Finalized', 'finalized'),
                         const SizedBox(width: 8),
                         _buildFilterChip('Lost', 'lost'),
                       ],
@@ -296,11 +307,19 @@ class _CrmLeadsScreenState extends ConsumerState<CrmLeadsScreen> {
 
   Color _getStatusColor(String? status) {
     switch (status) {
+      case 'new':
+        return Colors.lightBlue;
       case 'first_call':
         return Colors.orange;
       case 'pdf_sent':
         return Colors.blue;
-      case 'approved':
+      case 'sample_sent':
+        return Colors.purple;
+      case 'site_visit':
+        return Colors.teal;
+      case 'negotiation':
+        return Colors.amber;
+      case 'finalized':
         return Colors.green;
       case 'lost':
         return Colors.red;
