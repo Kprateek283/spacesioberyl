@@ -5,6 +5,7 @@ import '../../../core/network/api_client.dart';
 import '../../../core/network/sync_service.dart';
 import '../../../core/local_db/database_helper.dart';
 import '../../../core/utils/api_parse.dart';
+import '../../../core/utils/file_helper.dart';
 
 final hrServiceProvider = Provider<HrService>((ref) {
   final apiClient = ref.watch(apiClientProvider);
@@ -148,8 +149,9 @@ class HrService {
     };
 
     if (receiptImagePath != null) {
+      final persistentPath = await FileHelper.persistFile(receiptImagePath);
       payloadMap['receipt_url'] = MockUploadService.toMockUrl(
-        receiptImagePath,
+        persistentPath ?? receiptImagePath,
         bucket: 'receipts',
       );
     }

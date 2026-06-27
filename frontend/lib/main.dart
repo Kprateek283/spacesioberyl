@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'features/auth/providers/auth_provider.dart';
 import 'core/theme/app_theme.dart';
 import 'core/providers/cache_provider.dart';
+import 'core/routes/router.dart';
 
 // Updated import paths to match our new folder structure
 import 'screens/auth/login_screen.dart';
@@ -10,7 +12,9 @@ import 'features/auth/screens/pin_setup_screen.dart';
 import 'features/auth/screens/pin_entry_screen.dart';
 import 'core/widgets/main_shell_screen.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await dotenv.load(fileName: ".env");
   runApp(
     const ProviderScope(
       child: StudioCRMApp(),
@@ -18,16 +22,17 @@ void main() {
   );
 }
 
-class StudioCRMApp extends StatelessWidget {
+class StudioCRMApp extends ConsumerWidget {
   const StudioCRMApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
+  Widget build(BuildContext context, WidgetRef ref) {
+    final router = ref.watch(routerProvider);
+    return MaterialApp.router(
       title: 'Studio CRM',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
-      home: const AuthWrapper(),
+      routerConfig: router,
     );
   }
 }

@@ -5,6 +5,7 @@ import '../../../core/network/api_client.dart';
 import '../../../core/network/mock_upload_service.dart';
 import '../../../core/network/sync_service.dart';
 import '../../../core/utils/api_parse.dart';
+import '../../../core/utils/file_helper.dart';
 
 final executionServiceProvider = Provider<ExecutionService>((ref) {
   return ExecutionService(
@@ -74,7 +75,8 @@ class ExecutionService {
     String? photoUrl,
   }) async {
     final localId = 'local_${DateTime.now().millisecondsSinceEpoch}';
-    final resolvedPhoto = _resolvePhotoUrl(photoUrl);
+    final persistentPhotoUrl = await FileHelper.persistFile(photoUrl);
+    final resolvedPhoto = _resolvePhotoUrl(persistentPhotoUrl);
     final payload = {
       'updates': [
         {
@@ -113,8 +115,9 @@ class ExecutionService {
     required String status,
     String? clientFeedback,
   }) async {
+    final persistentUrl = await FileHelper.persistFile(clientSignoffUrl);
     final payload = {
-      'client_signoff_url': clientSignoffUrl,
+      'client_signoff_url': persistentUrl ?? clientSignoffUrl,
       'status': status,
       if (clientFeedback != null && clientFeedback.isNotEmpty)
         'client_feedback': clientFeedback,
@@ -154,7 +157,8 @@ class ExecutionService {
   }
 
   Future<void> contractorCheckIn(int jobId, {String? verificationNotes, String? proofPhotoUrl}) async {
-    await _api.contractorCheckIn(jobId, verificationNotes: verificationNotes, proofPhotoUrl: proofPhotoUrl);
+    final persistentPhotoUrl = await FileHelper.persistFile(proofPhotoUrl);
+    await _api.contractorCheckIn(jobId, verificationNotes: verificationNotes, proofPhotoUrl: persistentPhotoUrl ?? proofPhotoUrl);
   }
 
   Future<void> contractorCheckOut(int jobId) async {
