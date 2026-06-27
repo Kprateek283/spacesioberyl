@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>HR Dashboard</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@500;600&amp;family=Inter:wght@400;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "error": "#ba1a1a",
+                        "on-primary": "#ffffff",
+                        "surface-tint": "#2c694e",
+                        "tertiary": "#5e4300",
+                        "primary-fixed": "#b1f0ce",
+                        "on-tertiary-fixed": "#271900",
+                        "error-container": "#ffdad6",
+                        "on-surface": "#111c2c",
+                        "inverse-primary": "#95d4b3",
+                        "inverse-on-surface": "#ebf1ff",
+                        "on-error": "#ffffff",
+                        "outline-variant": "#bfc9c1",
+                        "surface-container-low": "#f0f3ff",
+                        "on-tertiary-fixed-variant": "#5d4200",
+                        "tertiary-fixed-dim": "#f7bd48",
+                        "tertiary-fixed": "#ffdea6",
+                        "on-secondary-fixed": "#0b1d2d",
+                        "on-secondary-container": "#556679",
+                        "on-error-container": "#93000a",
+                        "secondary-fixed-dim": "#b7c8de",
+                        "on-background": "#111c2c",
+                        "primary": "#0f5238",
+                        "surface-container-lowest": "#ffffff",
+                        "surface-container-highest": "#d8e3fa",
+                        "surface-dim": "#cfdaf1",
+                        "on-primary-fixed-variant": "#0e5138",
+                        "on-secondary": "#ffffff",
+                        "primary-container": "#2d6a4f",
+                        "outline": "#707973",
+                        "inverse-surface": "#263142",
+                        "secondary-fixed": "#d2e4fb",
+                        "surface": "#f9f9ff",
+                        "secondary-container": "#d2e4fb",
+                        "surface-variant": "#d8e3fa",
+                        "on-surface-variant": "#404943",
+                        "primary-fixed-dim": "#95d4b3",
+                        "on-primary-fixed": "#002114",
+                        "surface-container": "#e7eeff",
+                        "surface-bright": "#f9f9ff",
+                        "on-tertiary": "#ffffff",
+                        "on-tertiary-container": "#ffd384",
+                        "on-primary-container": "#a8e7c5",
+                        "surface-container-high": "#dee8ff",
+                        "tertiary-container": "#7c5900",
+                        "secondary": "#4f6073",
+                        "on-secondary-fixed-variant": "#38485a",
+                        "background": "#f9f9ff"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "stack-lg": "24px",
+                        "unit": "8px",
+                        "container-padding-desktop": "32px",
+                        "gutter": "24px",
+                        "container-padding-mobile": "16px",
+                        "stack-sm": "8px",
+                        "stack-md": "16px"
+                    },
+                    "fontFamily": {
+                        "body-md": ["Inter"],
+                        "label-lg": ["Inter"],
+                        "headline-md": ["IBM Plex Sans"],
+                        "display-lg": ["IBM Plex Sans"],
+                        "headline-lg-mobile": ["IBM Plex Sans"],
+                        "body-lg": ["Inter"],
+                        "body-sm": ["Inter"],
+                        "headline-lg": ["IBM Plex Sans"],
+                        "label-md": ["Inter"],
+                        "headline-sm": ["IBM Plex Sans"]
+                    },
+                    "fontSize": {
+                        "body-md": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "label-lg": ["14px", { "lineHeight": "20px", "letterSpacing": "0.02em", "fontWeight": "600" }],
+                        "headline-md": ["24px", { "lineHeight": "32px", "fontWeight": "500" }],
+                        "display-lg": ["48px", { "lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "600" }],
+                        "headline-lg-mobile": ["28px", { "lineHeight": "36px", "fontWeight": "600" }],
+                        "body-lg": ["18px", { "lineHeight": "28px", "fontWeight": "400" }],
+                        "body-sm": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+                        "headline-lg": ["32px", { "lineHeight": "40px", "letterSpacing": "-0.01em", "fontWeight": "600" }],
+                        "label-md": ["12px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600" }],
+                        "headline-sm": ["20px", { "lineHeight": "28px", "fontWeight": "500" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-background font-body-md antialiased flex flex-col min-h-screen">
+<!-- TopAppBar (Web) -->
+<header class="hidden md:flex justify-between items-center w-full px-container-padding-desktop h-16 bg-surface border-b border-outline-variant flat no shadows docked full-width top-0 z-50">
+<div class="flex items-center gap-stack-md">
+<span class="material-symbols-outlined text-primary text-[32px]">apartment</span>
+<span class="font-headline-md text-headline-md font-semibold text-primary">Enterprise Suite</span>
+</div>
+<nav class="flex gap-stack-md">
+<a class="font-label-lg text-label-lg text-on-surface-variant hover:bg-surface-container-low transition-colors px-4 py-2 rounded-lg" href="#">Home</a>
+<a class="font-label-lg text-label-lg text-on-surface-variant hover:bg-surface-container-low transition-colors px-4 py-2 rounded-lg" href="#">CRM</a>
+<a class="font-label-lg text-label-lg text-on-surface-variant hover:bg-surface-container-low transition-colors px-4 py-2 rounded-lg" href="#">Logistics</a>
+<a class="font-label-lg text-label-lg text-on-surface-variant hover:bg-surface-container-low transition-colors px-4 py-2 rounded-lg" href="#">Execution</a>
+<a class="font-label-lg text-label-lg text-primary font-bold hover:bg-surface-container-low transition-colors px-4 py-2 rounded-lg" href="#">HR</a>
+</nav>
+<div class="flex items-center gap-stack-md">
+<button class="text-on-surface-variant hover:bg-surface-container-low p-2 rounded-full transition-colors flex items-center justify-center">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<div class="w-10 h-10 rounded-full bg-surface-container-highest overflow-hidden border border-outline-variant">
+<img alt="User Profile" class="w-full h-full object-cover" data-alt="A professional headshot of a female executive in a well-lit modern office setting. The lighting is soft and natural, creating a bright, modern corporate aesthetic. She is wearing a dark blazer over a light blouse, conveying authority and trust. The background is slightly blurred but suggests a clean, minimalist enterprise environment with subtle off-white tones." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCTWTvyZQJPpl0tnRZW9GCur5A9L63cHbgb21SmoIp70Ewj76Ev1sDakpia97ewsIDmcrzAxM5JrXD1zmFORgAkAorpqE9xOnzPZnTXk1gxIsS5k8ooizW4sDGzY027Azr0NaaxtpvZ-mbnPM7zAM1KkQXsKPFZI0nVeKoaMvkLfgzwgd8ShLsMC5U3P05oL3JE9PYzqrOJ-1UPahY6-NANsVwOx7b93zYFCHYhRvv9Au8Zj5zsH3jyAUyBYVdBXn_iZlBS80Cc9A"/>
+</div>
+</div>
+</header>
+<!-- TopAppBar (Mobile) -->
+<header class="flex md:hidden justify-between items-center w-full px-container-padding-mobile h-16 bg-surface border-b border-outline-variant flat no shadows docked full-width top-0 z-50">
+<div class="flex items-center gap-2">
+<div class="w-8 h-8 rounded-full bg-surface-container-highest overflow-hidden border border-outline-variant">
+<img alt="User Profile" class="w-full h-full object-cover" data-alt="A professional headshot of a female executive in a well-lit modern office setting. The lighting is soft and natural, creating a bright, modern corporate aesthetic. She is wearing a dark blazer over a light blouse, conveying authority and trust. The background is slightly blurred but suggests a clean, minimalist enterprise environment with subtle off-white tones." src="https://lh3.googleusercontent.com/aida-public/AB6AXuD2ogK1OrSkG-F7XHVjB8_wfkIFC1QnT_DHgPi_2nPRmK36Wq2qGbv4JHgHW75Q6u_vLRbQMe1WqAHp-apPRf3pdZFYkezRXFFgexnag37c2UhbP3Da-shPE-TeFsqOvtHkWTxOFDQKXHgQ-A39GNfXXrUD8XogP5B4nN5OyzYeejr0SdWcTIIeKSI_MktqOaz_H1CIItATm55c-Q6uqbhAZfvJ7TdlOxEIKolmPx0K8zO2SUIA7iKvm8zezTL1mLjnuRszfx7OUg"/>
+</div>
+<span class="font-headline-md text-headline-md font-semibold text-primary">Enterprise Suite</span>
+</div>
+<button class="text-on-surface-variant hover:bg-surface-container-low p-2 rounded-full transition-colors flex items-center justify-center">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+</header>
+<!-- Main Canvas -->
+<main class="flex-1 w-full max-w-7xl mx-auto px-container-padding-mobile md:px-container-padding-desktop py-stack-lg pb-32 md:pb-stack-lg">
+<!-- Mobile Hero Card (Current Status & Check-in) -->
+<section class="mb-stack-lg">
+<div class="bg-surface-container-lowest rounded-xl border border-outline-variant p-stack-lg shadow-[0px_4px_12px_rgba(26,43,60,0.08)] flex flex-col items-center justify-center text-center relative overflow-hidden">
+<!-- Decorative background element -->
+<div class="absolute top-0 left-0 w-full h-2 bg-primary"></div>
+<h1 class="font-headline-sm text-headline-sm text-on-surface mb-unit">Current Status: <span class="text-primary font-semibold">Present</span></h1>
+<p class="font-body-md text-body-md text-on-surface-variant mb-stack-lg">Oct 26, 2023 • 08:42 AM</p>
+<!-- Massive Check In Button -->
+<button class="w-48 h-48 rounded-full bg-primary hover:bg-primary-container text-on-primary shadow-[0px_12px_24px_rgba(26,43,60,0.15)] transition-all duration-300 flex flex-col items-center justify-center gap-unit active:scale-95 mb-stack-md">
+<span class="material-symbols-outlined text-[48px]" style="font-variation-settings: 'FILL' 1;">fingerprint</span>
+<span class="font-headline-sm text-headline-sm">Check In</span>
+</button>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Tap to register your attendance</p>
+</div>
+</section>
+<!-- Quick Links Grid -->
+<section>
+<h2 class="font-headline-sm text-headline-sm text-on-surface mb-stack-md">Quick Actions</h2>
+<div class="grid grid-cols-2 md:grid-cols-4 gap-stack-md">
+<!-- My Leaves Card -->
+<a class="bg-surface-container-lowest rounded-xl border border-outline-variant p-stack-md flex flex-col items-center justify-center text-center hover:bg-surface-container-low transition-colors shadow-sm hover:shadow-[0px_4px_12px_rgba(26,43,60,0.08)]" href="#">
+<div class="w-12 h-12 rounded-full bg-surface-container text-primary flex items-center justify-center mb-stack-sm">
+<span class="material-symbols-outlined">event_note</span>
+</div>
+<span class="font-label-lg text-label-lg text-on-surface">My Leaves</span>
+</a>
+<!-- Office Expenses Card -->
+<a class="bg-surface-container-lowest rounded-xl border border-outline-variant p-stack-md flex flex-col items-center justify-center text-center hover:bg-surface-container-low transition-colors shadow-sm hover:shadow-[0px_4px_12px_rgba(26,43,60,0.08)]" href="#">
+<div class="w-12 h-12 rounded-full bg-surface-container text-primary flex items-center justify-center mb-stack-sm">
+<span class="material-symbols-outlined">receipt_long</span>
+</div>
+<span class="font-label-lg text-label-lg text-on-surface">Office Expenses</span>
+</a>
+<!-- IT Support Card -->
+<a class="bg-surface-container-lowest rounded-xl border border-outline-variant p-stack-md flex flex-col items-center justify-center text-center hover:bg-surface-container-low transition-colors shadow-sm hover:shadow-[0px_4px_12px_rgba(26,43,60,0.08)]" href="#">
+<div class="w-12 h-12 rounded-full bg-surface-container text-primary flex items-center justify-center mb-stack-sm">
+<span class="material-symbols-outlined">devices</span>
+</div>
+<span class="font-label-lg text-label-lg text-on-surface">IT Support</span>
+</a>
+<!-- Performance Card (Added for grid balance) -->
+<a class="bg-surface-container-lowest rounded-xl border border-outline-variant p-stack-md flex flex-col items-center justify-center text-center hover:bg-surface-container-low transition-colors shadow-sm hover:shadow-[0px_4px_12px_rgba(26,43,60,0.08)]" href="#">
+<div class="w-12 h-12 rounded-full bg-surface-container text-primary flex items-center justify-center mb-stack-sm">
+<span class="material-symbols-outlined">trending_up</span>
+</div>
+<span class="font-label-lg text-label-lg text-on-surface">Performance</span>
+</a>
+</div>
+</section>
+</main>
+<!-- BottomNavBar (Mobile Only) -->
+<nav class="md:hidden fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-2 py-3 pb-safe bg-surface border-t border-outline-variant flat no shadows">
+<a class="flex flex-col items-center justify-center text-on-surface-variant px-4 py-1 hover:bg-surface-container-high transition-colors rounded-lg" href="#">
+<span class="material-symbols-outlined mb-1">home</span>
+<span class="font-label-md text-label-md">Home</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant px-4 py-1 hover:bg-surface-container-high transition-colors rounded-lg" href="#">
+<span class="material-symbols-outlined mb-1">contacts</span>
+<span class="font-label-md text-label-md">CRM</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant px-4 py-1 hover:bg-surface-container-high transition-colors rounded-lg" href="#">
+<span class="material-symbols-outlined mb-1">local_shipping</span>
+<span class="font-label-md text-label-md">Logistics</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant px-4 py-1 hover:bg-surface-container-high transition-colors rounded-lg" href="#">
+<span class="material-symbols-outlined mb-1">task_alt</span>
+<span class="font-label-md text-label-md">Execution</span>
+</a>
+<a class="flex flex-col items-center justify-center bg-primary-container text-on-primary-container rounded-2xl px-4 py-1 scale-90 duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined mb-1" style="font-variation-settings: 'FILL' 1;">groups</span>
+<span class="font-label-md text-label-md">HR</span>
+</a>
+</nav>
+</body></html>
