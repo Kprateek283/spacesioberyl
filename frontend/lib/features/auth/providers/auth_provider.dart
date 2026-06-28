@@ -74,7 +74,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
         state = state.copyWith(
           isAuthenticated: true,
-          sessionUnlocked: false, // Must enter PIN on cold boot
+          sessionUnlocked: roleValue != 'super_admin', // Only super_admin uses PINs
           userRole: roleValue,
           isGhostMode: ghostMode,
           needsPinSetup: requiresPinSetup,
@@ -129,7 +129,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
         state = state.copyWith(
           isAuthenticated: true,
-          sessionUnlocked: false, // Must enter PIN after login
+          sessionUnlocked: roleName != 'super_admin', // Only super_admin uses PINs
           userRole: roleName,
           needsPinSetup: requiresPinSetup,
           isLoading: false,
