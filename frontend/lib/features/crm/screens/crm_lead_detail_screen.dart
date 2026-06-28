@@ -145,7 +145,7 @@ class _CrmLeadDetailScreenState extends ConsumerState<CrmLeadDetailScreen> {
                         ],
                       ),
                       DialogTextField(
-                        controller: item['itemName'],
+                        controller: item['itemName']!,
                         labelText: 'Item Name',
                       ),
                       const SizedBox(height: 8),
@@ -153,7 +153,7 @@ class _CrmLeadDetailScreenState extends ConsumerState<CrmLeadDetailScreen> {
                         children: [
                           Expanded(
                             child: DialogTextField(
-                              controller: item['quantity'],
+                              controller: item['quantity']!,
                               labelText: 'Qty',
                               keyboardType: TextInputType.number,
                             ),
@@ -163,13 +163,13 @@ class _CrmLeadDetailScreenState extends ConsumerState<CrmLeadDetailScreen> {
                             child: paymentTerm == 'cash'
                               ? GhostModeAware(
                                   child: DialogTextField(
-                                    controller: item['price'],
+                                    controller: item['price']!,
                                     labelText: 'Unit Price',
                                     keyboardType: TextInputType.number,
                                   ),
                                 )
                               : DialogTextField(
-                                  controller: item['price'],
+                                  controller: item['price']!,
                                   labelText: 'Unit Price',
                                   keyboardType: TextInputType.number,
                                 ),
