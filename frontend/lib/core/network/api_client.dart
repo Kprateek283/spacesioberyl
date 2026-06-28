@@ -35,7 +35,11 @@ class ApiClient {
           return handler.next(options);
         },
         onError: (DioException e, handler) async {
-          if (e.response?.statusCode == 401 && !e.requestOptions.path.contains('/login') && !e.requestOptions.path.contains('/refresh')) {
+          if (e.response?.statusCode == 401 && 
+              !e.requestOptions.path.contains('/login') && 
+              !e.requestOptions.path.contains('/refresh') &&
+              !e.requestOptions.path.contains('/verify-pin')) {
+            
             // Initiate Refresh Token Logic
             return await _handle401Error(e, handler);
           }
