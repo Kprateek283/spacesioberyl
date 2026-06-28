@@ -274,29 +274,6 @@ class _CrmLeadsScreenState extends ConsumerState<CrmLeadsScreen> {
                   },
                   child: const Text('View'),
                 ),
-                const SizedBox(width: 8),
-                ElevatedButton(
-                  onPressed: () async {
-                    final id = int.tryParse('${lead['id']}');
-                    if (id == null) return;
-                    try {
-                      await ref
-                          .read(crmServiceProvider)
-                          .updateLeadStatus(id, 'first_call');
-                      await refreshLeadsCache(ref);
-                      if (mounted) {
-                        UiFeedback.success(context, 'Status updated');
-                      }
-                    } catch (e) {
-                      if (mounted) UiFeedback.parsedError(context, e);
-                    }
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF0061a4),
-                    foregroundColor: Colors.white,
-                  ),
-                  child: const Text('Update'),
-                ),
               ],
             ),
           ],
