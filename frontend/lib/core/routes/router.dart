@@ -8,12 +8,10 @@ import '../../core/widgets/main_shell_screen.dart';
 import '../../screens/auth/login_screen.dart';
 import '../../features/auth/screens/pin_setup_screen.dart';
 import '../../features/auth/screens/pin_entry_screen.dart';
-import '../../screens/admin/admin_dashboard_screen.dart';
-import '../../screens/staff/staff_home_screen.dart';
-import '../../features/crm/screens/crm_leads_screen.dart';
+import '../../features/workspace/screens/workspace_screen.dart';
+import '../../features/workspace/screens/pipeline_screen.dart';
+import '../../features/workspace/screens/profile_screen.dart';
 import '../../features/crm/screens/crm_lead_detail_screen.dart';
-import '../../features/logistics/screens/logistics_hub_screen.dart';
-import '../../features/execution/screens/execution_hub_screen.dart';
 import '../../features/auth/screens/more_menu_screen.dart';
 
 class RouterNotifier extends ChangeNotifier {
@@ -69,47 +67,35 @@ final routerProvider = Provider<GoRouter>((ref) {
         routes: [
           GoRoute(
             path: '/',
+            redirect: (context, state) => '/workspace',
+          ),
+          GoRoute(
+            path: '/workspace',
             builder: (context, state) {
               final auth = ref.read(authProvider);
               final isAdmin = auth.userRole == 'admin' || auth.userRole == 'super_admin';
-              return isAdmin ? const AdminDashboardScreen() : const StaffHomeScreen();
+              return WorkspaceScreen(isAdmin: isAdmin);
             },
           ),
           GoRoute(
-            path: '/crm',
-            builder: (context, state) => const CrmLeadsScreen(),
+            path: '/pipeline',
+            builder: (context, state) => const PipelineScreen(),
             routes: [
               GoRoute(
-                path: 'lead/:id',
+                path: 'project/:id',
                 builder: (context, state) {
                   final idStr = state.pathParameters['id'];
                   final id = int.tryParse(idStr ?? '');
-                  if (id == null) return const Scaffold(body: Center(child: Text('Invalid Lead ID')));
+                  if (id == null) return const Scaffold(body: Center(child: Text('Invalid Project ID')));
+                  // Temporarily routing to Lead Details for MVP
                   return CrmLeadDetailScreen(leadId: id);
                 },
               ),
             ],
           ),
           GoRoute(
-            path: '/logistics',
-            builder: (context, state) {
-              final auth = ref.read(authProvider);
-              return LogisticsHubScreen(isAdmin: auth.userRole == 'admin' || auth.userRole == 'super_admin');
-            },
-          ),
-          GoRoute(
-            path: '/execution',
-            builder: (context, state) {
-              final auth = ref.read(authProvider);
-              return ExecutionHubScreen(isAdmin: auth.userRole == 'admin' || auth.userRole == 'super_admin');
-            },
-          ),
-          GoRoute(
-            path: '/more',
-            builder: (context, state) {
-              final auth = ref.read(authProvider);
-              return MoreMenuScreen(isAdmin: auth.userRole == 'admin' || auth.userRole == 'super_admin');
-            },
+            path: '/profile',
+            builder: (context, state) => const ProfileScreen(),
           ),
         ],
       ),
