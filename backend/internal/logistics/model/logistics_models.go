@@ -25,6 +25,7 @@ type Order struct {
 	OperationsManagerID *int      `json:"operations_manager_id" db:"operations_manager_id"`
 	Status              string    `json:"status" db:"status"`
 	PaymentTermType     *string   `json:"payment_term_type" db:"payment_term_type"`
+	ClientName          string    `json:"client_name" db:"client_name"`
 	CreatedAt           time.Time `json:"created_at" db:"created_at"`
 	UpdatedAt           time.Time `json:"updated_at" db:"updated_at"`
 }

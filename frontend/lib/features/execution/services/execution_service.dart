@@ -81,7 +81,7 @@ class ExecutionService {
       'updates': [
         {
           'local_id': localId,
-          'update_time': updateTime.toIso8601String(),
+          'update_time': updateTime.toUtc().toIso8601String(),
           'notes': notes,
           if (resolvedPhoto != null) 'photo_url': resolvedPhoto,
         },
@@ -92,7 +92,7 @@ class ExecutionService {
       jobId: jobId,
       localId: localId,
       notes: notes,
-      updateTime: updateTime.toIso8601String(),
+      updateTime: updateTime.toUtc().toIso8601String(),
       photoUrl: resolvedPhoto,
     );
 

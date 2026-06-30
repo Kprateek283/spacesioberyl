@@ -94,10 +94,15 @@ class _CrmLeadDetailScreenState extends ConsumerState<CrmLeadDetailScreen> {
   }
 
   Future<void> _createQuotation() async {
-    final itemNameCtrl = TextEditingController();
-    final quantityCtrl = TextEditingController();
-    final priceCtrl = TextEditingController();
     String paymentTerm = '100_advance';
+    
+    final List<Map<String, TextEditingController>> items = [
+      {
+        'itemName': TextEditingController(),
+        'quantity': TextEditingController(),
+        'price': TextEditingController(),
+      }
+    ];
 
     await showDialog(
       context: context,
@@ -122,31 +127,72 @@ class _CrmLeadDetailScreenState extends ConsumerState<CrmLeadDetailScreen> {
                   },
                 ),
                 const SizedBox(height: 12),
-                DialogTextField(
-                  controller: itemNameCtrl,
-                  labelText: 'Item Name',
+                const Divider(),
+                ...items.asMap().entries.map((entry) {
+                  final idx = entry.key;
+                  final item = entry.value;
+                  return Column(
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text('Item ${idx + 1}', style: const TextStyle(fontWeight: FontWeight.bold)),
+                          if (items.length > 1)
+                            IconButton(
+                              icon: const Icon(Icons.remove_circle, color: Colors.red),
+                              onPressed: () => setDialogState(() => items.removeAt(idx)),
+                            ),
+                        ],
+                      ),
+                      DialogTextField(
+                        controller: item['itemName']!,
+                        labelText: 'Item Name',
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: DialogTextField(
+                              controller: item['quantity']!,
+                              labelText: 'Qty',
+                              keyboardType: TextInputType.number,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: paymentTerm == 'cash'
+                              ? GhostModeAware(
+                                  child: DialogTextField(
+                                    controller: item['price']!,
+                                    labelText: 'Unit Price',
+                                    keyboardType: TextInputType.number,
+                                  ),
+                                )
+                              : DialogTextField(
+                                  controller: item['price']!,
+                                  labelText: 'Unit Price',
+                                  keyboardType: TextInputType.number,
+                                ),
+                          ),
+                        ],
+                      ),
+                      const Divider(),
+                    ],
+                  );
+                }),
+                TextButton.icon(
+                  onPressed: () {
+                    setDialogState(() {
+                      items.add({
+                        'itemName': TextEditingController(),
+                        'quantity': TextEditingController(),
+                        'price': TextEditingController(),
+                      });
+                    });
+                  },
+                  icon: const Icon(Icons.add),
+                  label: const Text('Add Item'),
                 ),
-                const SizedBox(height: 12),
-                DialogTextField(
-                  controller: quantityCtrl,
-                  labelText: 'Quantity',
-                  keyboardType: TextInputType.number,
-                ),
-                const SizedBox(height: 12),
-                if (paymentTerm == 'cash')
-                  GhostModeAware(
-                    child: DialogTextField(
-                      controller: priceCtrl,
-                      labelText: 'Unit Price',
-                      keyboardType: TextInputType.number,
-                    ),
-                  )
-                else
-                  DialogTextField(
-                    controller: priceCtrl,
-                    labelText: 'Unit Price',
-                    keyboardType: TextInputType.number,
-                  ),
               ],
             ),
           ),
@@ -155,25 +201,28 @@ class _CrmLeadDetailScreenState extends ConsumerState<CrmLeadDetailScreen> {
               onCancel: () => Navigator.pop(ctx),
               submitText: 'Create',
               onSubmit: () async {
-                final qty = int.tryParse(quantityCtrl.text);
-                final price = double.tryParse(priceCtrl.text);
-                if (itemNameCtrl.text.trim().isEmpty || qty == null || price == null) {
-                  UiFeedback.error(context, 'Invalid item details');
-                  return;
+                final lineItems = <Map<String, dynamic>>[];
+                for (final item in items) {
+                  final qty = int.tryParse(item['quantity']!.text);
+                  final price = double.tryParse(item['price']!.text);
+                  if (item['itemName']!.text.trim().isEmpty || qty == null || price == null) {
+                    UiFeedback.error(context, 'Invalid item details in list');
+                    return;
+                  }
+                  lineItems.add({
+                    'item_name': item['itemName']!.text.trim(),
+                    'quantity': qty,
+                    'unit_price': price,
+                  });
                 }
+                
                 Navigator.pop(ctx);
                 try {
                   await ref.read(crmServiceProvider).createQuotation(
                         leadId: widget.leadId,
                         paymentTermType: paymentTerm,
                         taxRate: paymentTerm == 'cash' ? 0.0 : 18.0,
-                        lineItems: [
-                          {
-                            'item_name': itemNameCtrl.text.trim(),
-                            'quantity': qty,
-                            'unit_price': price,
-                          }
-                        ],
+                        lineItems: lineItems,
                       );
                   await _load();
                   if (mounted) UiFeedback.success(context, 'Quotation created');

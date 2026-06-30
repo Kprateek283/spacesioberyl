@@ -56,7 +56,9 @@ class _SiteUpdatesScreenState extends ConsumerState<SiteUpdatesScreen> {
 
   Future<void> _showCreateUpdateDialog() async {
     final descriptionController = TextEditingController();
-    final siteIdController = TextEditingController();
+    final siteIdController = TextEditingController(
+      text: widget.initialJobId != null ? widget.initialJobId.toString() : (ref.read(selectedJobIdProvider)?.toString() ?? ''),
+    );
     XFile? dialogPhoto = selectedPhoto;
 
     return showDialog(

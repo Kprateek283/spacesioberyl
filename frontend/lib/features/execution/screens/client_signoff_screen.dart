@@ -83,10 +83,12 @@ class _ClientSignoffScreenState extends ConsumerState<ClientSignoffScreen> {
         backgroundColor: const Color(0xFF0061a4),
         foregroundColor: Colors.white,
       ),
-      body: ListView(
+      body: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
-        children: [
-          DialogTextField(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            DialogTextField(
             controller: _jobIdController,
             labelText: 'Job ID',
             keyboardType: TextInputType.number,
@@ -141,6 +143,7 @@ class _ClientSignoffScreenState extends ConsumerState<ClientSignoffScreen> {
                 : const Text('Submit Sign-off'),
           ),
         ],
+      ),
       ),
     );
   }

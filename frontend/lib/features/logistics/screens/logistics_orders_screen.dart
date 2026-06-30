@@ -2,13 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/utils/api_parse.dart';
 import '../../../shared/widgets/async_error_view.dart';
+import '../../iam/services/iam_service.dart';
 import '../services/logistics_service.dart';
 
 import '../../../shared/widgets/dialog_action_buttons.dart';
 import '../../../shared/widgets/dialog_fields.dart';
 
 final logisticsOrdersProvider =
-    FutureProvider<List<Map<String, dynamic>>>((ref) async {
+    FutureProvider.autoDispose<List<Map<String, dynamic>>>((ref) async {
   return ref.watch(logisticsServiceProvider).getOrders();
 });
 
@@ -81,37 +82,96 @@ class _LogisticsOrdersScreenState extends ConsumerState<LogisticsOrdersScreen> {
   }
 
   Future<void> _assignManager(int orderId) async {
-    final managerCtrl = TextEditingController();
+    List<Map<String, dynamic>> users = [];
+    try {
+      users = await ref.read(iamServiceProvider).getUsers();
+    } catch (_) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Failed to load users')));
+      return;
+    }
+    
+    final managers = users.where((u) {
+       final r = (u['role'] ?? u['role_name'] ?? '').toString();
+       return r.contains('manager') || r.contains('admin');
+    }).toList();
+    if (managers.isEmpty) managers.addAll(users);
+
+    int? selectedManagerId;
+    if (managers.isNotEmpty) selectedManagerId = int.tryParse(managers.first['id'].toString());
+
+    if (selectedManagerId == null) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No valid managers found')));
+      return;
+    }
+
     await showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Assign Manager'),
-        content: DialogTextField(
-          controller: managerCtrl,
-          labelText: 'Manager ID',
-          keyboardType: TextInputType.number,
-        ),
-        actions: [
-          DialogActionButtons(
-            onCancel: () => Navigator.pop(ctx),
-            submitText: 'Assign',
-            onSubmit: () async {
-              final mId = int.tryParse(managerCtrl.text);
-              if (mId == null) return;
-              Navigator.pop(ctx);
-              try {
-                await ref.read(logisticsServiceProvider).assignOrderManager(orderId, mId);
-                ref.invalidate(logisticsOrdersProvider);
-              } catch (_) {}
-            },
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: const Text('Assign Manager'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Select Manager', style: TextStyle(fontSize: 12, color: Colors.grey)),
+              DialogDropdownField<int>(
+                value: selectedManagerId!,
+                items: managers.map((u) {
+                  return DropdownMenuItem<int>(
+                    value: int.tryParse(u['id'].toString()),
+                    child: Text('${u['name']} (${u['role'] ?? u['role_name']})'),
+                  );
+                }).toList(),
+                onChanged: (v) {
+                  if (v != null) {
+                    setDialogState(() => selectedManagerId = v);
+                  }
+                },
+              ),
+            ],
           ),
-        ],
+          actions: [
+            DialogActionButtons(
+              onCancel: () => Navigator.pop(ctx),
+              submitText: 'Assign',
+              onSubmit: () async {
+                if (selectedManagerId == null) return;
+                Navigator.pop(ctx);
+                try {
+                  await ref.read(logisticsServiceProvider).assignOrderManager(orderId, selectedManagerId!);
+                  ref.invalidate(logisticsOrdersProvider);
+                } catch (_) {}
+              },
+            ),
+          ],
+        ),
       ),
     );
   }
 
   Future<void> _createDispatch(int orderId) async {
-    final staffCtrl = TextEditingController();
+    List<Map<String, dynamic>> users = [];
+    try {
+      users = await ref.read(iamServiceProvider).getUsers();
+    } catch (_) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Failed to load users')));
+      return;
+    }
+    
+    final staffList = users.where((u) {
+       final r = (u['role'] ?? u['role_name'] ?? '').toString();
+       return r.contains('staff') || r.contains('admin') || r.contains('manager');
+    }).toList();
+    if (staffList.isEmpty) staffList.addAll(users);
+
+    int? selectedStaffId;
+    if (staffList.isNotEmpty) selectedStaffId = int.tryParse(staffList.first['id'].toString());
+
+    if (selectedStaffId == null) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No valid staff found')));
+      return;
+    }
+
     String responsibility = 'company_staff';
     final driverCtrl = TextEditingController();
     final vehicleCtrl = TextEditingController();
@@ -124,13 +184,25 @@ class _LogisticsOrdersScreenState extends ConsumerState<LogisticsOrdersScreen> {
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                DialogTextField(
-                  controller: staffCtrl,
-                  labelText: 'Staff ID',
-                  keyboardType: TextInputType.number,
+                const Text('Select Staff', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                DialogDropdownField<int>(
+                  value: selectedStaffId!,
+                  items: staffList.map((u) {
+                    return DropdownMenuItem<int>(
+                      value: int.tryParse(u['id'].toString()),
+                      child: Text('${u['name']}'),
+                    );
+                  }).toList(),
+                  onChanged: (v) {
+                    if (v != null) {
+                      setDialogState(() => selectedStaffId = v);
+                    }
+                  },
                 ),
                 const SizedBox(height: 12),
+                const Text('Loading Responsibility', style: TextStyle(fontSize: 12, color: Colors.grey)),
                 DialogDropdownField<String>(
                   value: responsibility,
                   items: const [
@@ -151,19 +223,21 @@ class _LogisticsOrdersScreenState extends ConsumerState<LogisticsOrdersScreen> {
               onCancel: () => Navigator.pop(ctx),
               submitText: 'Schedule',
               onSubmit: () async {
-                final sId = int.tryParse(staffCtrl.text);
-                if (sId == null) return;
+                if (selectedStaffId == null) return;
                 Navigator.pop(ctx);
                 try {
                   await ref.read(logisticsServiceProvider).createDispatch(
                         orderId: orderId,
-                        operationsStaffId: sId,
+                        operationsStaffId: selectedStaffId!,
                         loadingResponsibility: responsibility,
-                        transportDriverName: driverCtrl.text,
-                        transportVehicleNo: vehicleCtrl.text,
+                        transportDriverName: driverCtrl.text.trim(),
+                        transportVehicleNo: vehicleCtrl.text.trim(),
                       );
+                  ref.invalidate(logisticsOrdersProvider);
                   if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Dispatch Scheduled')));
-                } catch (_) {}
+                } catch (e) {
+                  if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+                }
               },
             ),
           ],

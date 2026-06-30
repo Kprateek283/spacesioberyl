@@ -368,14 +368,14 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
                     OutlinedButton.icon(
-                      onPressed: () => _showRejectModal(id),
+                      onPressed: () => _showRejectModal(id.toString()),
                       icon: const Icon(Icons.close, color: Color(0xFFba1a1a)),
                       label: const Text('Reject', style: TextStyle(color: Color(0xFFba1a1a))),
                       style: OutlinedButton.styleFrom(side: const BorderSide(color: Color(0xFFffdad6))),
                     ),
                     const SizedBox(width: 12),
                     ElevatedButton.icon(
-                      onPressed: () => _handleApprove(id),
+                      onPressed: () => _handleApprove(id.toString()),
                       icon: const Icon(Icons.check),
                       label: const Text('Approve'),
                       style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF006e1c), foregroundColor: Colors.white),

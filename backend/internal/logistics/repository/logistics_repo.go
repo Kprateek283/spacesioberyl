@@ -89,13 +89,15 @@ func (r *LogisticsRepository) ListOrders(ctx context.Context) ([]*model.Order, e
 	ghostMode := middleware.GetGhostMode(ctx)
 
 	query := `
-		SELECT id, quotation_id, lead_id, operations_manager_id, status, payment_term_type, created_at, updated_at
-		FROM orders WHERE 1=1
+		SELECT o.id, o.quotation_id, o.lead_id, o.operations_manager_id, o.status, o.payment_term_type, o.created_at, o.updated_at, l.client_name
+		FROM orders o
+		JOIN leads l ON o.lead_id = l.id
+		WHERE 1=1
 	`
 	if !ghostMode {
-		query += " AND (payment_term_type IS NULL OR payment_term_type != 'cash')"
+		query += " AND (o.payment_term_type IS NULL OR o.payment_term_type != 'cash')"
 	}
-	query += " ORDER BY created_at DESC"
+	query += " ORDER BY o.created_at DESC"
 
 	rows, err := r.db.Query(ctx, query)
 	if err != nil {
@@ -106,7 +108,7 @@ func (r *LogisticsRepository) ListOrders(ctx context.Context) ([]*model.Order, e
 	var orders []*model.Order
 	for rows.Next() {
 		var o model.Order
-		if err := rows.Scan(&o.ID, &o.QuotationID, &o.LeadID, &o.OperationsManagerID, &o.Status, &o.PaymentTermType, &o.CreatedAt, &o.UpdatedAt); err != nil {
+		if err := rows.Scan(&o.ID, &o.QuotationID, &o.LeadID, &o.OperationsManagerID, &o.Status, &o.PaymentTermType, &o.CreatedAt, &o.UpdatedAt, &o.ClientName); err != nil {
 			return nil, err
 		}
 		orders = append(orders, &o)
