@@ -9,7 +9,7 @@ import '../../../shared/widgets/dialog_action_buttons.dart';
 import '../../../shared/widgets/dialog_fields.dart';
 
 final logisticsOrdersProvider =
-    FutureProvider<List<Map<String, dynamic>>>((ref) async {
+    FutureProvider.autoDispose<List<Map<String, dynamic>>>((ref) async {
   return ref.watch(logisticsServiceProvider).getOrders();
 });
 

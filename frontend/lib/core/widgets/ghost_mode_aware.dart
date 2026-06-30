@@ -22,8 +22,8 @@ class GhostModeAware extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final authState = ref.watch(authProvider);
 
-    // If ghost mode is NOT active and hideInGhostMode is true, return fallback (or empty)
-    if (!authState.isGhostMode && hideInGhostMode) {
+    // If ghost mode IS active and hideInGhostMode is true, return fallback (or empty)
+    if (authState.isGhostMode && hideInGhostMode) {
       return fallback ?? const SizedBox.shrink();
     }
 
@@ -47,7 +47,7 @@ class GhostAwareCashText extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final authState = ref.watch(authProvider);
 
-    if (!authState.isGhostMode) {
+    if (authState.isGhostMode) {
       return const SizedBox.shrink();
     }
 
@@ -76,7 +76,7 @@ class GhostAwareCashField extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final authState = ref.watch(authProvider);
 
-    if (!authState.isGhostMode) {
+    if (authState.isGhostMode) {
       return const SizedBox.shrink();
     }
 

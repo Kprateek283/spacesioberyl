@@ -115,6 +115,20 @@
 
 | # | Button | Page | Input | Expected Output | Actual Output |
 |---|--------|------|-------|-----------------|---------------|
+| O04 | **Mark In Transit** | Order Details | None | Updates status, UI reflects transit | |
+| O05 | **Mark Delivered** | Order Details | None | Updates status, UI reflects delivery | |
+
+---
+
+## 4. AUTOMATED E2E INTEGRATION TESTS
+
+| Flow | Description | File | Status | Notes |
+|---|---|---|---|---|
+| Flow 1 | Lead -> Quotation -> Logistics | `integration_test/flow1_test.dart` | **BLOCKED / FAILED** | Fails to identify newly created lead in the CRM list after dialog closes. It clicks Lead 1 instead, attributing subsequent flow events to the wrong client. Logged in QA_REPORT.md |
+| Flow 2 | Quotation Rejection | TBD | Not Started | |
+
+| # | Button | Page | Input | Expected Output | Actual Output |
+|---|--------|------|-------|-----------------|---------------|
 | M01 | **My Attendance** | More Menu | none | Push MyAttendanceScreen | |
 | M02 | **My Leaves** | More Menu | none | Push MyLeavesScreen | |
 | M03 | **My Expenses** | More Menu | none | Push MyExpensesScreen | |

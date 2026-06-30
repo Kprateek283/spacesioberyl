@@ -35,7 +35,7 @@ class DatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 4,
+      version: 5,
       onCreate: _createDB,
       onUpgrade: _upgradeDB,
     );
@@ -106,6 +106,20 @@ class DatabaseHelper {
       await _createLeavesCacheTable(db);
       await _createExpensesCacheTable(db);
       await _createSiteUpdatesCacheTable(db);
+    }
+    if (oldVersion < 5) {
+      // Add missing CRM/Logistics tables for older databases
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS leads(
+          id INTEGER PRIMARY KEY,
+          client_name TEXT NOT NULL,
+          client_phone TEXT,
+          client_email TEXT,
+          source TEXT,
+          status TEXT,
+          assigned_to INTEGER
+        )
+      ''');
     }
   }
 
@@ -270,7 +284,7 @@ class DatabaseHelper {
       return _webCaches['leads'] ?? [];
     }
     final db = await instance.database;
-    return await db.query('leads');
+    return await db.query('leads', orderBy: 'id DESC');
   }
 
   Future<void> cacheAttendance(List<dynamic> rows) async {

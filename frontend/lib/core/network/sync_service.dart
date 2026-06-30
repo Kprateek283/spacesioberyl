@@ -60,7 +60,10 @@ class SyncService {
         final fileFieldKey = mutation['file_field_key'] as String?;
         final retryCount = mutation['retry_count'] as int;
 
-        if (retryCount >= 5) continue;
+        if (retryCount >= 5) {
+          await dbHelper.removeMutation(id);
+          continue;
+        }
 
         try {
           final payload = jsonDecode(payloadString) as Map<String, dynamic>;
