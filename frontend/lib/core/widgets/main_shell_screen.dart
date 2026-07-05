@@ -18,32 +18,18 @@ class MainShellScreen extends ConsumerWidget {
     // Boot cache sync
     ref.read(cacheBootSyncProvider);
 
-    final labels = isAdmin
-        ? const ['Team', 'CRM', 'Logistics', 'Execution', 'More']
-        : const ['Home', 'CRM', 'Logistics', 'Execution', 'More'];
+    final labels = const ['Workspace', 'Pipeline', 'Profile'];
 
-    final icons = isAdmin
-        ? const [
-            Icons.groups,
-            Icons.contacts,
-            Icons.local_shipping,
-            Icons.construction,
-            Icons.more_horiz,
-          ]
-        : const [
-            Icons.home,
-            Icons.contacts,
-            Icons.local_shipping,
-            Icons.construction,
-            Icons.more_horiz,
-          ];
+    final icons = const [
+      Icons.dashboard,
+      Icons.view_kanban,
+      Icons.person,
+    ];
 
     final routes = [
-      '/',
-      '/crm',
-      '/logistics',
-      '/execution',
-      '/more',
+      '/workspace',
+      '/pipeline',
+      '/profile',
     ];
 
     int currentIndex = _calculateSelectedIndex(context, routes);
@@ -68,10 +54,8 @@ class MainShellScreen extends ConsumerWidget {
 
   static int _calculateSelectedIndex(BuildContext context, List<String> routes) {
     final String location = GoRouterState.of(context).uri.path;
-    if (location.startsWith('/crm')) return 1;
-    if (location.startsWith('/logistics')) return 2;
-    if (location.startsWith('/execution')) return 3;
-    if (location.startsWith('/more')) return 4;
-    return 0; // Home / Team
+    if (location.startsWith('/pipeline')) return 1;
+    if (location.startsWith('/profile')) return 2;
+    return 0; // Workspace
   }
 }
