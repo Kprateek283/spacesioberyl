@@ -9,8 +9,8 @@ final workspaceProvider = FutureProvider.autoDispose((ref) async {
     final timelineRes = await api.get('/workspace/personal-timeline');
 
     return {
-      'actionItems': actionItemsRes.data,
-      'timeline': timelineRes.data,
+      'actionItems': actionItemsRes.data['items'],
+      'timeline': timelineRes.data['events'],
     };
   } catch (e) {
     throw Exception('Failed to load workspace data: $e');

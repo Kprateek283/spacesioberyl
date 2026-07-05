@@ -6,7 +6,7 @@ final pipelineProvider = FutureProvider.autoDispose((ref) async {
 
   try {
     final response = await api.get('/projects/pipeline');
-    return response.data as List;
+    return response.data as Map<String, dynamic>;
   } catch (e) {
     throw Exception('Failed to load pipeline: $e');
   }

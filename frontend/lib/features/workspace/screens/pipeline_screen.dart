@@ -18,10 +18,10 @@ class PipelineScreen extends ConsumerWidget {
       body: pipelineData.when(
         loading: () => const Center(child: CircularProgressIndicator(color: AppColors.primary)),
         error: (err, stack) => Center(child: Text('Error: $err', style: const TextStyle(color: AppColors.error))),
-        data: (projects) {
-          final leads = projects.where((p) => p['stage'] == 'LEAD').toList();
-          final procurement = projects.where((p) => p['stage'] == 'PROCUREMENT').toList();
-          final execution = projects.where((p) => p['stage'] == 'EXECUTION').toList();
+        data: (data) {
+          final leads = data['leads'] as List? ?? [];
+          final procurement = data['procurement'] as List? ?? [];
+          final execution = data['execution'] as List? ?? [];
 
           return PageView(
             children: [
@@ -89,7 +89,7 @@ class _PipelineColumn extends StatelessWidget {
                   margin: const EdgeInsets.only(bottom: 12),
                   child: InkWell(
                     onTap: () {
-                      context.go('/pipeline/project/${p['lead_id']}');
+                      context.go('/pipeline/project/${p['id']}');
                     },
                     borderRadius: BorderRadius.circular(12),
                     child: Padding(

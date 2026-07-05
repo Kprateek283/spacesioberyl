@@ -68,11 +68,11 @@ class WorkspaceScreen extends ConsumerWidget {
           margin: const EdgeInsets.only(bottom: 8),
           child: ListTile(
             leading: Icon(
-              item['urgency'] == 'HIGH' ? Icons.warning : Icons.info,
-              color: item['urgency'] == 'HIGH' ? AppColors.error : AppColors.primary,
+              item['type'] == 'QUOTE_APPROVAL' ? Icons.warning : Icons.info,
+              color: item['type'] == 'QUOTE_APPROVAL' ? AppColors.error : AppColors.primary,
             ),
             title: Text(item['title'] ?? ''),
-            subtitle: Text(item['subtitle'] ?? ''),
+            subtitle: Text(item['requested_by'] ?? ''),
             trailing: ElevatedButton(
               onPressed: () {},
               child: const Text('Review'),
@@ -92,8 +92,8 @@ class WorkspaceScreen extends ConsumerWidget {
         return ListTile(
           contentPadding: EdgeInsets.zero,
           leading: const Icon(Icons.circle, size: 12, color: AppColors.primary),
-          title: Text(event['title'] ?? ''),
-          subtitle: Text(event['status'] ?? ''),
+          title: Text(event['description'] ?? ''),
+          subtitle: Text(event['event_type'] ?? ''),
           trailing: Text(
             event['timestamp'] != null ? event['timestamp'].toString().substring(0, 10) : '',
             style: const TextStyle(color: AppColors.textTertiary, fontSize: 12),
