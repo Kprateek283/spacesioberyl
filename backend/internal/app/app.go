@@ -45,6 +45,9 @@ import (
 	execHandler "github.com/spacesioberyl/system-v1/internal/execution/handler"
 	execRepo "github.com/spacesioberyl/system-v1/internal/execution/repository"
 	execService "github.com/spacesioberyl/system-v1/internal/execution/service"
+
+	// Module 6: BFF (Backend-For-Frontend / Unified UX)
+	bff "github.com/spacesioberyl/system-v1/internal/bff"
 )
 
 type Application struct {
@@ -75,6 +78,7 @@ func New(db *pgxpool.Pool, cfg *config.Config) *Application {
 	app.registerCRM()
 	app.registerLogistics()
 	app.registerExecution()
+	app.registerBFF()
 
 	return app
 }
@@ -181,6 +185,13 @@ func (a *Application) registerExecution() {
 
 	executionModule.RegisterRoutes(a.Router, handler, contractorHandler)
 	logger.Log.Info("Module 5 (Execution + Contractor Management) registered")
+}
+
+func (a *Application) registerBFF() {
+	svc := bff.NewBFFService(a.DB)
+	handler := bff.NewBFFHandler(svc)
+	bff.RegisterRoutes(a.Router, handler)
+	logger.Log.Info("Module 6 (BFF / Unified UX) registered")
 }
 
 func (a *Application) Start() error {
