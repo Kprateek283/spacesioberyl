@@ -3,7 +3,9 @@ import 'execution_jobs_screen.dart';
 import 'installers_list_screen.dart';
 import 'site_updates_screen.dart';
 import 'client_signoff_screen.dart';
+import '../../../core/theme/app_colors.dart';
 import '../../../shared/widgets/module_tile.dart';
+import '../../iam/screens/profile_screen.dart';
 
 class ExecutionHubScreen extends StatelessWidget {
   final bool isAdmin;
@@ -15,8 +17,13 @@ class ExecutionHubScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Execution'),
-        backgroundColor: const Color(0xFF0061a4),
-        foregroundColor: Colors.white,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.person_outline),
+            tooltip: 'Profile',
+            onPressed: () => pushScreen(context, const ProfileScreen()),
+          ),
+        ],
       ),
       body: GridView.count(
         crossAxisCount: 2,
@@ -27,7 +34,7 @@ class ExecutionHubScreen extends StatelessWidget {
           ModuleTile(
             title: isAdmin ? 'All Jobs' : 'My Jobs',
             icon: Icons.construction,
-            color: const Color(0xFF0061a4),
+            color: AppColors.primary,
             onTap: () => pushScreen(
               context,
               ExecutionJobsScreen(myTasksOnly: !isAdmin),
@@ -36,19 +43,19 @@ class ExecutionHubScreen extends StatelessWidget {
           ModuleTile(
             title: 'Installers',
             icon: Icons.engineering,
-            color: const Color(0xFF006e1c),
+            color: AppColors.secondary,
             onTap: () => pushScreen(context, const InstallersListScreen()),
           ),
           ModuleTile(
             title: 'Site Updates',
             icon: Icons.photo_camera,
-            color: const Color(0xFF904d00),
+            color: AppColors.tertiary,
             onTap: () => pushScreen(context, const SiteUpdatesScreen()),
           ),
           ModuleTile(
             title: 'Client Sign-off',
             icon: Icons.draw,
-            color: const Color(0xFF5e4300),
+            color: AppColors.primary,
             onTap: () => pushScreen(context, const ClientSignoffScreen()),
           ),
         ],

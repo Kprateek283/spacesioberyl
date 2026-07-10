@@ -4,15 +4,16 @@ import 'package:go_router/go_router.dart';
 
 import '../../features/auth/providers/auth_provider.dart';
 import '../../core/widgets/main_shell_screen.dart';
+import '../../core/theme/app_colors.dart';
 
 import '../../screens/auth/login_screen.dart';
 import '../../features/auth/screens/pin_setup_screen.dart';
 import '../../features/auth/screens/pin_entry_screen.dart';
 import '../../features/workspace/screens/workspace_screen.dart';
-import '../../features/workspace/screens/pipeline_screen.dart';
-import '../../features/workspace/screens/profile_screen.dart';
-import '../../features/crm/screens/crm_lead_detail_screen.dart';
-import '../../features/auth/screens/more_menu_screen.dart';
+import '../../features/crm/screens/crm_leads_screen.dart';
+import '../../features/logistics/screens/logistics_hub_screen.dart';
+import '../../features/execution/screens/execution_hub_screen.dart';
+import '../../features/hr/screens/hr_hub_screen.dart';
 
 class RouterNotifier extends ChangeNotifier {
   final Ref ref;
@@ -47,7 +48,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/loading',
         builder: (context, state) => const Scaffold(
-          body: Center(child: CircularProgressIndicator(color: Color(0xFF0061a4))),
+          body: Center(child: CircularProgressIndicator(color: AppColors.primary)),
         ),
       ),
       GoRoute(
@@ -67,10 +68,10 @@ final routerProvider = Provider<GoRouter>((ref) {
         routes: [
           GoRoute(
             path: '/',
-            redirect: (context, state) => '/workspace',
+            redirect: (context, state) => '/home',
           ),
           GoRoute(
-            path: '/workspace',
+            path: '/home',
             builder: (context, state) {
               final auth = ref.read(authProvider);
               final isAdmin = auth.userRole == 'admin' || auth.userRole == 'super_admin';
@@ -78,24 +79,28 @@ final routerProvider = Provider<GoRouter>((ref) {
             },
           ),
           GoRoute(
-            path: '/pipeline',
-            builder: (context, state) => const PipelineScreen(),
-            routes: [
-              GoRoute(
-                path: 'project/:id',
-                builder: (context, state) {
-                  final idStr = state.pathParameters['id'];
-                  final id = int.tryParse(idStr ?? '');
-                  if (id == null) return const Scaffold(body: Center(child: Text('Invalid Project ID')));
-                  // Temporarily routing to Lead Details for MVP
-                  return CrmLeadDetailScreen(leadId: id);
-                },
-              ),
-            ],
+            path: '/crm',
+            builder: (context, state) => const CrmLeadsScreen(),
           ),
           GoRoute(
-            path: '/profile',
-            builder: (context, state) => const ProfileScreen(),
+            path: '/logistics',
+            builder: (context, state) {
+              final auth = ref.read(authProvider);
+              final isAdmin = auth.userRole == 'admin' || auth.userRole == 'super_admin';
+              return LogisticsHubScreen(isAdmin: isAdmin);
+            },
+          ),
+          GoRoute(
+            path: '/execution',
+            builder: (context, state) {
+              final auth = ref.read(authProvider);
+              final isAdmin = auth.userRole == 'admin' || auth.userRole == 'super_admin';
+              return ExecutionHubScreen(isAdmin: isAdmin);
+            },
+          ),
+          GoRoute(
+            path: '/hr',
+            builder: (context, state) => const HrHubScreen(),
           ),
         ],
       ),

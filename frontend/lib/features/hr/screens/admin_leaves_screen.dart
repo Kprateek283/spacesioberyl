@@ -84,8 +84,6 @@ class _AdminLeavesScreenState extends ConsumerState<AdminLeavesScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Leave Management'),
-        backgroundColor: const Color(0xFF0061a4),
-        foregroundColor: Colors.white,
       ),
       body: Column(
         children: [

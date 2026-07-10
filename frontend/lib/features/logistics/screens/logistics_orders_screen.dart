@@ -89,7 +89,8 @@ class _LogisticsOrdersScreenState extends ConsumerState<LogisticsOrdersScreen> {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Failed to load users')));
       return;
     }
-    
+    if (!mounted) return;
+
     final managers = users.where((u) {
        final r = (u['role'] ?? u['role_name'] ?? '').toString();
        return r.contains('manager') || r.contains('admin');
@@ -140,7 +141,18 @@ class _LogisticsOrdersScreenState extends ConsumerState<LogisticsOrdersScreen> {
                 try {
                   await ref.read(logisticsServiceProvider).assignOrderManager(orderId, selectedManagerId!);
                   ref.invalidate(logisticsOrdersProvider);
-                } catch (_) {}
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Manager assigned')),
+                    );
+                  }
+                } catch (e) {
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Failed to assign manager: $e')),
+                    );
+                  }
+                }
               },
             ),
           ],
@@ -157,7 +169,8 @@ class _LogisticsOrdersScreenState extends ConsumerState<LogisticsOrdersScreen> {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Failed to load users')));
       return;
     }
-    
+    if (!mounted) return;
+
     final staffList = users.where((u) {
        final r = (u['role'] ?? u['role_name'] ?? '').toString();
        return r.contains('staff') || r.contains('admin') || r.contains('manager');
@@ -253,8 +266,6 @@ class _LogisticsOrdersScreenState extends ConsumerState<LogisticsOrdersScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Logistics Orders'),
-        backgroundColor: const Color(0xFF0061a4),
-        foregroundColor: Colors.white,
       ),
       body: ordersAsync.when(
         data: (orders) {
@@ -286,7 +297,7 @@ class _LogisticsOrdersScreenState extends ConsumerState<LogisticsOrdersScreen> {
                     title: Text('$client (#$id)'),
                     subtitle: Text(status.replaceAll('_', ' ')),
                     children: [
-                      ButtonBar(
+                      OverflowBar(
                         alignment: MainAxisAlignment.spaceEvenly,
                         children: [
                           TextButton(

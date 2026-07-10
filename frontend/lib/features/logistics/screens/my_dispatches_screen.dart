@@ -1,4 +1,3 @@
-// ignore_for_file: use_build_context_synchronously
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/utils/api_parse.dart';
@@ -27,9 +26,11 @@ class MyDispatchesScreen extends ConsumerWidget {
             notes: type == 'dispatch' ? 'Left warehouse' : 'Delivered to site',
           );
       ref.invalidate(myDispatchesProvider);
-      UiFeedback.success(context, '${type == 'dispatch' ? 'Dispatch' : 'Delivery'} logged');
+      if (context.mounted) {
+        UiFeedback.success(context, '${type == 'dispatch' ? 'Dispatch' : 'Delivery'} logged');
+      }
     } catch (e) {
-      UiFeedback.parsedError(context, e);
+      if (context.mounted) UiFeedback.parsedError(context, e);
     }
   }
 
@@ -40,8 +41,6 @@ class MyDispatchesScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('My Dispatches'),
-        backgroundColor: const Color(0xFF0061a4),
-        foregroundColor: Colors.white,
       ),
       body: dispatchesAsync.when(
         data: (items) {

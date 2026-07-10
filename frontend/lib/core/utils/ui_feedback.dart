@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
+import '../theme/app_colors.dart';
 import 'form_validators.dart';
 
 class UiFeedback {
-  static const _successColor = Color(0xFF006e1c);
-  static const _errorColor = Color(0xFFba1a1a);
-  static const _infoColor = Color(0xFF0061a4);
+  static const _successColor = AppColors.primary;
+  static const _errorColor = AppColors.error;
+  static const _infoColor = AppColors.secondary;
 
   static void success(
     BuildContext context,

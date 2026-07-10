@@ -1,31 +1,44 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
+// Smoke test for the Studio CRM app shell. It boots the real widget tree
+// (ProviderScope + MaterialApp.router) with a fake, storage-free AuthNotifier
+// standing in for the real one (which talks to FlutterSecureStorage and isn't
+// available under the plain widget-test platform), and asserts the app lands
+// on the login screen when the user is unauthenticated.
 import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:frontend/core/network/api_client.dart';
+import 'package:frontend/features/auth/providers/auth_provider.dart';
 import 'package:frontend/main.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+class _FakeAuthNotifier extends AuthNotifier {
+  _FakeAuthNotifier(super.apiClient);
+
+  @override
+  Future<void> checkAuthStatus() async {
+    state = state.copyWith(isLoading: false, isAuthenticated: false);
+  }
+}
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const ProviderScope(child: StudioCRMApp()));
+  setUpAll(() {
+    dotenv.loadFromString(envString: 'API_URL=http://localhost:8080/api/v1');
+  });
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+  testWidgets('Unauthenticated users land on the login screen',
+      (WidgetTester tester) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          authProvider.overrideWith((ref) => _FakeAuthNotifier(ApiClient())),
+        ],
+        child: const StudioCRMApp(),
+      ),
+    );
+    await tester.pumpAndSettle();
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
-
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+    expect(find.text('Log In'), findsOneWidget);
+    expect(find.byType(TextFormField), findsAtLeastNWidgets(2));
   });
 }

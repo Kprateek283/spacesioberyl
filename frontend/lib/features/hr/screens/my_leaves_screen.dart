@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import '../../../core/theme/app_colors.dart';
 import '../../../core/local_db/database_helper.dart';
 import '../../../core/utils/form_validators.dart';
 import '../../../core/utils/ui_feedback.dart';
@@ -224,8 +225,7 @@ class _MyLeavesScreenState extends ConsumerState<MyLeavesScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('My Leaves'),
-        backgroundColor: const Color(0xFF0061a4),
-        foregroundColor: Colors.white,
+
         elevation: 0,
       ),
       body: leavesAsync.when(
@@ -241,11 +241,11 @@ class _MyLeavesScreenState extends ConsumerState<MyLeavesScreen> {
                   margin: const EdgeInsets.all(16),
                   padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF0061a4),
+                    color: AppColors.primary,
                     borderRadius: BorderRadius.circular(12),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.1),
+                        color: Colors.black.withValues(alpha: 0.1),
                         blurRadius: 8,
                         offset: const Offset(0, 2),
                       ),
@@ -325,7 +325,7 @@ class _MyLeavesScreenState extends ConsumerState<MyLeavesScreen> {
           );
         },
         loading: () => const Center(
-          child: CircularProgressIndicator(color: Color(0xFF0061a4)),
+          child: CircularProgressIndicator(),
         ),
         error: (err, stack) => AsyncErrorView(
           error: err,
@@ -334,7 +334,6 @@ class _MyLeavesScreenState extends ConsumerState<MyLeavesScreen> {
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: isCreatingLeave ? null : _showCreateLeaveDialog,
-        backgroundColor: const Color(0xFF0061a4),
         child: const Icon(Icons.add),
       ),
     );
@@ -400,7 +399,7 @@ class _MyLeavesScreenState extends ConsumerState<MyLeavesScreen> {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(
-                    color: _getStatusColor(status).withOpacity(0.2),
+                    color: _getStatusColor(status).withValues(alpha: 0.2),
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(

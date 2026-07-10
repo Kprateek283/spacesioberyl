@@ -1,9 +1,13 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 import 'package:signature/signature.dart';
-import '../network/mock_upload_service.dart';
 import '../utils/ui_feedback.dart';
 
-/// Captures a client signature and returns a mock upload URL for the backend.
+/// Captures a client signature, persists it as a local PNG file, and returns
+/// the local file path. The real upload happens during offline-queue sync
+/// (see SyncService), consistent with how other captured photos are handled.
 class SignatureCanvasWidget extends StatefulWidget {
   final ValueChanged<String> onSignatureComplete;
 
@@ -18,6 +22,7 @@ class SignatureCanvasWidget extends StatefulWidget {
 
 class _SignatureCanvasWidgetState extends State<SignatureCanvasWidget> {
   late SignatureController _controller;
+  bool _isSaving = false;
 
   @override
   void initState() {
@@ -54,17 +59,7 @@ class _SignatureCanvasWidgetState extends State<SignatureCanvasWidget> {
               label: const Text('Clear'),
             ),
             ElevatedButton.icon(
-              onPressed: () async {
-                if (_controller.isEmpty) {
-                  UiFeedback.error(context, 'Please draw a signature');
-                  return;
-                }
-                final mockPath =
-                    'signature_${DateTime.now().millisecondsSinceEpoch}.png';
-                widget.onSignatureComplete(
-                  MockUploadService.toMockUrl(mockPath, bucket: 'signatures'),
-                );
-              },
+              onPressed: _isSaving ? null : () => _saveSignature(context),
               icon: const Icon(Icons.check_circle),
               label: const Text('Use Signature'),
             ),
@@ -72,6 +67,33 @@ class _SignatureCanvasWidgetState extends State<SignatureCanvasWidget> {
         ),
       ],
     );
+  }
+
+  Future<void> _saveSignature(BuildContext context) async {
+    if (_controller.isEmpty) {
+      UiFeedback.error(context, 'Please draw a signature');
+      return;
+    }
+
+    setState(() => _isSaving = true);
+    try {
+      final bytes = await _controller.toPngBytes();
+      if (bytes == null) {
+        if (context.mounted) UiFeedback.error(context, 'Failed to capture signature');
+        return;
+      }
+
+      final tempDir = await getTemporaryDirectory();
+      final fileName = 'signature_${DateTime.now().millisecondsSinceEpoch}.png';
+      final file = File(p.join(tempDir.path, fileName));
+      await file.writeAsBytes(bytes);
+
+      widget.onSignatureComplete(file.path);
+    } catch (e) {
+      if (context.mounted) UiFeedback.error(context, 'Failed to save signature: $e');
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
   }
 
   @override

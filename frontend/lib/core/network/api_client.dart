@@ -17,9 +17,12 @@ class ApiClient {
   ));
   final _storage = const FlutterSecureStorage();
   bool _isRefreshing = false;
-  
-  // A queue for saving requests that fail with 401 while refreshing is in progress
-  final _retryQueue = <Future<Response> Function()>[];
+
+  // Requests that failed with 401 while a refresh was already in progress.
+  // Each entry's ErrorInterceptorHandler must be resolved/rejected once the
+  // refresh completes, otherwise the original caller's request hangs forever.
+  final List<({RequestOptions requestOptions, ErrorInterceptorHandler handler})>
+      _retryQueue = [];
 
   ApiClient() {
     _dio.interceptors.add(
@@ -71,39 +74,57 @@ class ApiClient {
         if (response.statusCode == 200) {
           final newToken = response.data['access_token'];
           final newRefreshToken = response.data['refresh_token']; // If backend rotates it
-          
+
           await _storage.write(key: 'jwt', value: newToken);
           if (newRefreshToken != null) {
              await _storage.write(key: 'refresh_token', value: newRefreshToken);
           }
 
-          // Retry queued requests
-          _isRefreshing = false;
-          for (var retryReq in _retryQueue) {
-            retryReq(); // Fire and forget or handle properly if complex
-          }
+          // Resolve/reject every request that queued up while this refresh
+          // was in flight, so their original callers don't hang forever.
+          final queued = List.of(_retryQueue);
           _retryQueue.clear();
+          for (final item in queued) {
+            try {
+              final resp = await _retryOriginalRequest(item.requestOptions, newToken);
+              item.handler.resolve(resp);
+            } catch (err) {
+              item.handler.reject(
+                err is DioException
+                    ? err
+                    : DioException(requestOptions: item.requestOptions, error: err),
+              );
+            }
+          }
 
           // Retry the original failed request
           final retryResponse = await _retryOriginalRequest(e.requestOptions, newToken);
           return handler.resolve(retryResponse);
         } else {
-          _isRefreshing = false;
+          _failQueuedRequests(e);
           return handler.next(e);
         }
       } catch (err) {
-        _isRefreshing = false;
-        // Refresh failed, probably expired. 
+        // Refresh failed, probably expired.
         await _storage.delete(key: 'jwt');
         await _storage.delete(key: 'refresh_token');
+        _failQueuedRequests(e);
         return handler.next(e);
+      } finally {
+        _isRefreshing = false;
       }
     } else {
-      // Already refreshing, queue the request
-      _retryQueue.add(() async {
-         final newToken = await _storage.read(key: 'jwt');
-         return await _retryOriginalRequest(e.requestOptions, newToken!);
-      });
+      // Already refreshing: queue this request's handler to be resolved once
+      // the in-flight refresh completes.
+      _retryQueue.add((requestOptions: e.requestOptions, handler: handler));
+    }
+  }
+
+  void _failQueuedRequests(DioException cause) {
+    final queued = List.of(_retryQueue);
+    _retryQueue.clear();
+    for (final item in queued) {
+      item.handler.reject(cause);
     }
   }
 
@@ -434,11 +455,13 @@ class ApiClient {
     required String paymentTermType,
     required double taxRate,
     required List<Map<String, dynamic>> lineItems,
+    String? customPdfUrl,
   }) {
     return post('/crm/leads/$leadId/quotations', data: {
       'payment_term_type': paymentTermType,
       'tax_rate': taxRate,
       'line_items': lineItems,
+      if (customPdfUrl != null) 'custom_pdf_url': customPdfUrl,
     });
   }
 

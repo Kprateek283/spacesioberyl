@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
+import '../../../core/theme/app_colors.dart';
 import '../../../core/local_db/database_helper.dart';
 import '../../../core/utils/form_validators.dart';
 import '../../../core/utils/ui_feedback.dart';
@@ -189,9 +190,6 @@ class _MyExpensesScreenState extends ConsumerState<MyExpensesScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('My Expenses'),
-        backgroundColor: const Color(0xFF0061a4),
-        foregroundColor: Colors.white,
-        elevation: 0,
       ),
       body: expensesAsync.when(
         data: (expenses) {
@@ -218,11 +216,11 @@ class _MyExpensesScreenState extends ConsumerState<MyExpensesScreen> {
                 margin: const EdgeInsets.all(16),
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF0061a4),
+                  color: AppColors.primary,
                   borderRadius: BorderRadius.circular(12),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.1),
+                      color: Colors.black.withValues(alpha: 0.1),
                       blurRadius: 8,
                       offset: const Offset(0, 2),
                     ),
@@ -258,7 +256,7 @@ class _MyExpensesScreenState extends ConsumerState<MyExpensesScreen> {
                         Text(
                           '₹${submittedAmount.toStringAsFixed(2)}',
                           style: const TextStyle(
-                            color: Colors.green,
+                            color: Colors.white,
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
                           ),
@@ -308,7 +306,7 @@ class _MyExpensesScreenState extends ConsumerState<MyExpensesScreen> {
           );
         },
         loading: () => const Center(
-          child: CircularProgressIndicator(color: Color(0xFF0061a4)),
+          child: CircularProgressIndicator(),
         ),
         error: (err, stack) => AsyncErrorView(
           error: err,
@@ -317,7 +315,6 @@ class _MyExpensesScreenState extends ConsumerState<MyExpensesScreen> {
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: isCreatingExpense ? null : _showCreateExpenseDialog,
-        backgroundColor: const Color(0xFF0061a4),
         child: const Icon(Icons.add),
       ),
     );
@@ -331,9 +328,9 @@ class _MyExpensesScreenState extends ConsumerState<MyExpensesScreen> {
       onSelected: (selected) {
         setState(() => filterStatus = status);
       },
-      selectedColor: const Color(0xFF0061a4),
+      selectedColor: AppColors.primaryContainer,
       labelStyle: TextStyle(
-        color: isSelected ? Colors.white : Colors.black,
+        color: isSelected ? AppColors.onPrimaryContainer : AppColors.onSurface,
       ),
     );
   }
@@ -368,17 +365,17 @@ class _MyExpensesScreenState extends ConsumerState<MyExpensesScreen> {
                       const SizedBox(height: 4),
                       Text(
                         '${category?.replaceAll('_', ' ').toUpperCase() ?? 'N/A'} • ${_formatDate(createdAt)}',
-                        style: const TextStyle(fontSize: 12, color: Colors.grey),
+                        style: TextStyle(fontSize: 12, color: AppColors.onSurfaceVariant),
                       ),
                     ],
                   ),
                 ),
                 Text(
                   '₹${amount?.toStringAsFixed(2) ?? '0.00'}',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
-                    color: Color(0xFF0061a4),
+                    color: AppColors.primary,
                   ),
                 ),
               ],
@@ -390,7 +387,7 @@ class _MyExpensesScreenState extends ConsumerState<MyExpensesScreen> {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(
-                    color: _getStatusColor(status).withOpacity(0.2),
+                    color: _getStatusColor(status).withValues(alpha: 0.2),
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(
@@ -413,15 +410,15 @@ class _MyExpensesScreenState extends ConsumerState<MyExpensesScreen> {
   Color _getStatusColor(String status) {
     switch (status) {
       case 'draft':
-        return Colors.grey;
+        return AppColors.onSurfaceVariant;
       case 'submitted':
-        return Colors.orange;
+        return AppColors.secondary;
       case 'approved':
-        return Colors.green;
+        return AppColors.primary;
       case 'rejected':
-        return Colors.red;
+        return AppColors.error;
       default:
-        return Colors.grey;
+        return AppColors.onSurfaceVariant;
     }
   }
 
@@ -441,9 +438,7 @@ class _MyExpensesScreenState extends ConsumerState<MyExpensesScreen> {
 
     try {
       final data = await ref.read(hrServiceProvider).getExpenses();
-      if (data is List) {
-        await DatabaseHelper.instance.cacheExpenses(data);
-      }
+      await DatabaseHelper.instance.cacheExpenses(data);
     } catch (_) {}
   }
 }

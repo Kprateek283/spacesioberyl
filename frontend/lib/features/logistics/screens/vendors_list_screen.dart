@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/providers/cache_provider.dart';
+import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/form_validators.dart';
 import '../../../core/utils/ui_feedback.dart';
 import '../../../shared/widgets/async_error_view.dart';
@@ -146,9 +147,6 @@ class _VendorsListScreenState extends ConsumerState<VendorsListScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Vendors'),
-        backgroundColor: const Color(0xFF0061a4),
-        foregroundColor: Colors.white,
-        elevation: 0,
       ),
       body: vendorsAsync.when(
         data: (vendors) {
@@ -164,7 +162,7 @@ class _VendorsListScreenState extends ConsumerState<VendorsListScreen> {
                 );
         },
         loading: () => const Center(
-          child: CircularProgressIndicator(color: Color(0xFF0061a4)),
+          child: CircularProgressIndicator(),
         ),
         error: (err, stack) => AsyncErrorView(
           error: err,
@@ -173,7 +171,6 @@ class _VendorsListScreenState extends ConsumerState<VendorsListScreen> {
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: isCreatingVendor ? null : _showCreateVendorDialog,
-        backgroundColor: const Color(0xFF0061a4),
         child: const Icon(Icons.add),
       ),
     );
@@ -204,7 +201,7 @@ class _VendorsListScreenState extends ConsumerState<VendorsListScreen> {
                       const SizedBox(height: 4),
                       Text(
                         vendor['contact_person'] ?? 'No contact',
-                        style: const TextStyle(fontSize: 12, color: Colors.grey),
+                        style: TextStyle(fontSize: 12, color: AppColors.onSurfaceVariant),
                       ),
                     ],
                   ),
@@ -214,7 +211,7 @@ class _VendorsListScreenState extends ConsumerState<VendorsListScreen> {
             const SizedBox(height: 12),
             Row(
               children: [
-                const Icon(Icons.phone, size: 16, color: Colors.grey),
+                Icon(Icons.phone, size: 16, color: AppColors.onSurfaceVariant),
                 const SizedBox(width: 8),
                 Text(
                   vendor['phone'] ?? 'N/A',
@@ -226,12 +223,12 @@ class _VendorsListScreenState extends ConsumerState<VendorsListScreen> {
             if (vendor['email'] != null)
               Row(
                 children: [
-                  const Icon(Icons.email, size: 16, color: Colors.grey),
+                  Icon(Icons.email, size: 16, color: AppColors.onSurfaceVariant),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       vendor['email'],
-                      style: const TextStyle(fontSize: 13, color: Colors.blue),
+                      style: TextStyle(fontSize: 13, color: AppColors.primary),
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
@@ -241,12 +238,12 @@ class _VendorsListScreenState extends ConsumerState<VendorsListScreen> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
-                color: Colors.blue[100],
+                color: AppColors.secondaryContainer,
                 borderRadius: BorderRadius.circular(4),
               ),
               child: Text(
                 'Payment: ${(vendor['default_payment_mode'] as String?)?.replaceAll('_', ' ').toUpperCase() ?? 'N/A'}',
-                style: const TextStyle(fontSize: 11, color: Colors.blue),
+                style: TextStyle(fontSize: 11, color: AppColors.onSecondaryContainer),
               ),
             ),
           ],

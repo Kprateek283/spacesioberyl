@@ -1,4 +1,3 @@
-// ignore_for_file: use_build_context_synchronously
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/utils/api_parse.dart';
@@ -24,8 +23,6 @@ class CrmFollowupsScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Follow-up Queue'),
-        backgroundColor: const Color(0xFF0061a4),
-        foregroundColor: Colors.white,
       ),
       body: followupsAsync.when(
         data: (items) {
@@ -80,11 +77,15 @@ class CrmFollowupsScreen extends ConsumerWidget {
                                                     .completeFollowup(
                                                         id, ctrl.text.trim());
                                                 ref.invalidate(followupsProvider);
-                                                UiFeedback.success(
-                                                    context, 'Follow-up done');
+                                                if (context.mounted) {
+                                                  UiFeedback.success(
+                                                      context, 'Follow-up done');
+                                                }
                                               } catch (e) {
-                                                UiFeedback.parsedError(
-                                                    context, e);
+                                                if (context.mounted) {
+                                                  UiFeedback.parsedError(
+                                                      context, e);
+                                                }
                                               }
                                             },
                                     ),

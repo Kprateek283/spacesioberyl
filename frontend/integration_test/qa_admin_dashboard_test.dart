@@ -5,8 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:frontend/main.dart' as app;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:sqflite_common_ffi/sqflite_ffi.dart' as sqflite;
-import 'package:path/path.dart';
+import 'test_helpers.dart';
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
@@ -21,22 +20,12 @@ void main() {
     await storage.deleteAll();
   });
 
-
-  testWidgets('QA Admin Dashboard Module Tests', (tester) async {
+  testWidgets('QA Admin: 5-tab nav and HR admin tools are reachable', (tester) async {
     const storage = FlutterSecureStorage();
     await storage.deleteAll();
 
-    try {
-      if (sqflite.databaseFactory is sqflite.DatabaseFactory) {
-         final dbPath = await sqflite.getDatabasesPath();
-         final path = p.join(dbPath, 'spacesio.db');
-         await sqflite.deleteDatabase(path);
-      }
-    } catch (_) {}
-
     app.main();
     await tester.pumpAndSettle();
-    
     await tester.pumpAndSettle(const Duration(seconds: 2));
 
     // -- 1. Login and Unlock --
@@ -47,98 +36,77 @@ void main() {
 
     // Check if it's the Setup PIN screen or Unlock screen
     int waitRetries = 0;
-    while(find.text('Complete Setup').evaluate().isEmpty && find.text('Unlock').evaluate().isEmpty && waitRetries < 50) {
+    while (find.text('Save & Initialize').evaluate().isEmpty &&
+        find.text('Session Locked').evaluate().isEmpty &&
+        waitRetries < 50) {
       await tester.pump(const Duration(milliseconds: 100));
       waitRetries++;
     }
 
-    if (find.text('Complete Setup').evaluate().isNotEmpty) {
+    if (find.text('Save & Initialize').evaluate().isNotEmpty) {
       await tester.enterText(find.byType(TextField).first, '1111');
       await tester.enterText(find.byType(TextField).last, '999999');
-      await tester.tap(find.text('Complete Setup'));
+      await tester.tap(find.text('Save & Initialize'));
       await tester.pumpAndSettle();
       await tester.pump(const Duration(seconds: 1));
     }
 
-    // Now at Unlock PIN screen
-    await tester.enterText(find.byType(TextField).first, '1111');
-    await tester.tap(find.text('Unlock'));
-    await tester.pumpAndSettle();
+    // Now at the numpad PIN entry screen
+    if (find.text('Session Locked').evaluate().isNotEmpty) {
+      await enterPinViaNumpad(tester, '1111');
+      await tester.pumpAndSettle();
+    }
 
     int dashboardRetries = 0;
-    while(find.text('Team Dashboard').evaluate().isEmpty && dashboardRetries < 50) {
+    while (find.text('Command Center').evaluate().isEmpty && dashboardRetries < 50) {
       await tester.pump(const Duration(milliseconds: 100));
       dashboardRetries++;
     }
-    expect(find.text('Team Dashboard'), findsOneWidget, reason: 'Should be on Admin Dashboard');
+    expect(find.text('Command Center'), findsOneWidget, reason: 'Should be on Workspace screen');
 
-    // -- 2. Admin Dashboard Tests --
+    // -- 2. Verify the 5-tab bottom nav is present --
+    expect(find.text('Home'), findsWidgets);
+    expect(find.text('CRM'), findsOneWidget);
+    expect(find.text('Logistics'), findsOneWidget);
+    expect(find.text('Execution'), findsOneWidget);
+    expect(find.text('HR'), findsOneWidget);
 
-    // D01: Refresh icon
-    expect(find.byIcon(Icons.refresh), findsOneWidget);
-    await tester.tap(find.byIcon(Icons.refresh));
+    // -- 3. Open the HR tab and verify admin-only tiles are present --
+    await tester.tap(find.text('HR'));
     await tester.pumpAndSettle();
 
-    // D05: Summary Cards
-    expect(find.text('PRESENT'), findsOneWidget);
-    expect(find.text('OVERRIDES'), findsOneWidget);
-    expect(find.text('OFF-SITE'), findsOneWidget);
-    expect(find.text('ABSENT'), findsOneWidget);
-
-    // D03: Today's Report Tab
-    expect(find.text("Today's Report"), findsOneWidget);
-    
-    // D13: Add Staff FAB
-    final addStaffFab = find.widgetWithText(FloatingActionButton, 'Add Staff');
-    expect(addStaffFab, findsOneWidget);
-    await tester.tap(addStaffFab);
-    await tester.pumpAndSettle();
-    
-    // Verify we navigated to IAM Users screen
+    expect(find.text('My Attendance'), findsOneWidget);
+    expect(find.text('My Leaves'), findsOneWidget);
+    expect(find.text('My Expenses'), findsOneWidget);
+    // Admin-only tiles
+    expect(find.text('Leave Admin'), findsOneWidget);
+    expect(find.text('Expense Ledger'), findsOneWidget);
     expect(find.text('User Management'), findsOneWidget);
-    
-    // Go back to Dashboard
-    await tester.tap(find.byTooltip('Back'));
-    await tester.pumpAndSettle();
-    expect(find.text('Team Dashboard'), findsOneWidget);
 
-    // D04: Pending Requests Tab
-    final pendingTab = find.text("Pending Requests");
-    await tester.tap(pendingTab);
+    // -- 4. Verify User Management actually opens --
+    await tester.tap(find.text('User Management'));
+    await tester.pumpAndSettle();
+    expect(find.text('User Management'), findsWidgets); // AppBar title too
+    await tester.pageBack();
     await tester.pumpAndSettle();
 
-    // D12: Test Reject Cancel
-    if (find.text('Reject').evaluate().isNotEmpty) {
-      await tester.tap(find.text('Reject').first);
-      await tester.pumpAndSettle();
-      
-      // Dialog should open
-      expect(find.text('Reject Request'), findsOneWidget);
-      
-      // D11: Empty reject -> Confirm disabled
-      // D12: Cancel
-      await tester.tap(find.text('Cancel'));
-      await tester.pumpAndSettle();
-      expect(find.text('Reject Request'), findsNothing); // Dialog closed
-
-      // D08: Approve
-      await tester.tap(find.text('Approve').first);
-      await tester.pumpAndSettle();
-      // Should show success snackbar and refresh
-      expect(find.text('Override approved successfully'), findsOneWidget);
-      await tester.pumpAndSettle(const Duration(seconds: 3));
-    }
-
-    // D02: Logout
-    final logoutFinder = find.widgetWithIcon(IconButton, Icons.logout);
-    expect(logoutFinder, findsWidgets);
-    await tester.tap(logoutFinder.last);
+    // -- 5. Verify CRM/Logistics/Execution tabs are reachable and Follow-ups/Complaints icons exist on CRM --
+    await tester.tap(find.text('CRM'));
     await tester.pumpAndSettle();
-    await tester.pump(const Duration(seconds: 1));
+    expect(find.text('Sales Pipeline'), findsOneWidget);
+    expect(find.byTooltip('Follow-ups'), findsOneWidget);
+    expect(find.byTooltip('Complaints'), findsOneWidget);
 
-    // Verify logout
+    // -- 6. Logout via the HR tab's Profile icon --
+    await tester.tap(find.text('HR'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Profile'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Logout'));
+    await tester.pumpAndSettle();
+
     int logoutRetries = 0;
-    while(find.text('Log In').evaluate().isEmpty && logoutRetries < 50) {
+    while (find.text('Log In').evaluate().isEmpty && logoutRetries < 50) {
       await tester.pump(const Duration(milliseconds: 100));
       logoutRetries++;
     }
