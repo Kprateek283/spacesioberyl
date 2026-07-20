@@ -8,7 +8,7 @@ import 'package:frontend/main.dart' as app;
 import 'package:frontend/core/local_db/database_helper.dart';
 import 'package:signature/signature.dart';
 import 'package:sqflite/sqflite.dart' as sqflite;
-import 'package:path/path.dart';
+import 'test_helpers.dart';
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
@@ -27,14 +27,13 @@ void main() {
   testWidgets('Flow 3: Execution Task Assignment & Installer Flow E2E Test',
       (tester) async {
     
-    // Clear local database to ensure clean state
+    // Clear local database to ensure clean state.
+    // The factory may not be set up yet here, so this might fail; tables are
+    // also cleared after app.main() below.
     try {
-      if (sqflite.databaseFactory is sqflite.DatabaseFactory) {
-         // factory is probably not set up yet here, so this might fail. We will also clear tables after app.main().
-         final dbPath = await sqflite.getDatabasesPath();
-         final path = p.join(dbPath, 'spacesio.db');
-         await sqflite.deleteDatabase(path);
-      }
+      final dbPath = await sqflite.getDatabasesPath();
+      final path = p.join(dbPath, 'spacesio.db');
+      await sqflite.deleteDatabase(path);
     } catch (_) {}
 
     app.main();
@@ -58,29 +57,26 @@ void main() {
       await tester.pumpAndSettle();
     }
 
-    // 3. PIN Entry
-    final pin = '1111';
-    // The PIN screen uses a standard TextField with obscureText: true
+    // 3. PIN Entry (numpad lock screen)
     int pinRetries = 0;
-    while (find.byType(TextField).evaluate().isEmpty && pinRetries < 50) {
+    while (find.text('Session Locked').evaluate().isEmpty && pinRetries < 50) {
       await tester.pump(const Duration(milliseconds: 100));
       pinRetries++;
     }
-    if (find.byType(TextField).evaluate().isNotEmpty) {
-      await tester.enterText(find.byType(TextField).first, pin);
-      await tester.tap(find.text('Unlock'));
+    if (find.text('Session Locked').evaluate().isNotEmpty) {
+      await enterPinViaNumpad(tester, '1111');
       await tester.pumpAndSettle();
     }
 
     // Wait for Dashboard
     int dashRetries = 0;
-    while (find.byIcon(Icons.construction).evaluate().isEmpty && dashRetries < 50) {
+    while (find.text('Command Center').evaluate().isEmpty && dashRetries < 50) {
       await tester.pump(const Duration(milliseconds: 100));
       dashRetries++;
     }
 
-    // 3. Navigate to Execution Module
-    await tester.tap(find.byIcon(Icons.construction).first);
+    // 3. Navigate to Execution tab directly
+    await tester.tap(find.text('Execution'));
     await tester.pumpAndSettle();
 
     // 4. Create Installer
@@ -120,15 +116,15 @@ void main() {
 
     // Wait for jobs list
     int jobRetries = 0;
-    while (find.byType(ListTile).evaluate().isEmpty && jobRetries < 50) {
+    while (find.byType(Card).evaluate().isEmpty && jobRetries < 50) {
       await tester.pump(const Duration(milliseconds: 100));
       jobRetries++;
     }
 
-    expect(find.byType(ListTile).evaluate().isNotEmpty, true, reason: 'Expected to find at least one job');
+    expect(find.byType(Card).evaluate().isNotEmpty, true, reason: 'Expected to find at least one job');
 
-    // Tap first job
-    await tester.tap(find.byType(ListTile).first);
+    // Tap first job card
+    await tester.tap(find.byType(Card).first);
     await tester.pumpAndSettle();
 
     // Wait for Job Detail

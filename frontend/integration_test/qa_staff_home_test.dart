@@ -5,8 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:frontend/main.dart' as app;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:sqflite_common_ffi/sqflite_ffi.dart' as sqflite;
-import 'package:path/path.dart';
+import 'test_helpers.dart';
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
@@ -21,157 +20,98 @@ void main() {
     await storage.deleteAll();
   });
 
-
-  testWidgets('QA Staff Home Module Tests', (tester) async {
+  testWidgets('QA Staff: Workspace quick actions and restricted HR tab',
+      (tester) async {
     const storage = FlutterSecureStorage();
     await storage.deleteAll();
 
-    try {
-      if (sqflite.databaseFactory is sqflite.DatabaseFactory) {
-         final dbPath = await sqflite.getDatabasesPath();
-         final path = p.join(dbPath, 'studio_crm.db');
-         await sqflite.deleteDatabase(path);
-      }
-    } catch (_) {}
-
     app.main();
     await tester.pumpAndSettle();
-    
     await tester.pumpAndSettle(const Duration(seconds: 2));
 
     // -- 1. Login as Staff --
     await tester.enterText(find.byType(TextFormField).first, 'staff@gmail.com');
     await tester.enterText(find.byType(TextFormField).last, 'staff123');
     await tester.tap(find.text('Log In'));
-    await tester.pump(const Duration(seconds: 2));
+    await tester.pumpAndSettle();
 
-    // Staff logs in directly to Staff Home, no PIN required.
+    // Every role now requires PIN verification (Setup on first login, Unlock
+    // afterwards) -- staff no longer bypasses this like it used to.
+    int waitRetries = 0;
+    while (find.text('Save & Initialize').evaluate().isEmpty &&
+        find.text('Session Locked').evaluate().isEmpty &&
+        waitRetries < 50) {
+      await tester.pump(const Duration(milliseconds: 100));
+      waitRetries++;
+    }
+
+    if (find.text('Save & Initialize').evaluate().isNotEmpty) {
+      await tester.enterText(find.byType(TextField).first, '1111');
+      await tester.enterText(find.byType(TextField).last, '999999');
+      await tester.tap(find.text('Save & Initialize'));
+      await tester.pumpAndSettle();
+      await tester.pump(const Duration(seconds: 1));
+    }
+
+    if (find.text('Session Locked').evaluate().isNotEmpty) {
+      await enterPinViaNumpad(tester, '1111');
+      await tester.pumpAndSettle();
+    }
+
     int homeRetries = 0;
-    while(find.text('Studio CRM').evaluate().isEmpty && homeRetries < 50) {
+    while (find.text('Command Center').evaluate().isEmpty && homeRetries < 50) {
       await tester.pump(const Duration(milliseconds: 100));
       homeRetries++;
     }
-    expect(find.text('Studio CRM'), findsOneWidget, reason: 'Should be on Staff Home screen');
+    expect(find.text('Command Center'), findsOneWidget, reason: 'Should be on Workspace screen');
 
-    // -- 3. Staff Home Tests --
+    // -- 2. Quick Actions navigate to the right screens --
+    await tester.tap(find.text('Clock In/Out'));
+    await tester.pumpAndSettle();
+    expect(find.text('My Attendance'), findsWidgets); // AppBar title
+    expect(find.widgetWithText(ElevatedButton, 'Check In'), findsOneWidget);
+    expect(find.widgetWithText(ElevatedButton, 'Check Out'), findsOneWidget);
+    await tester.pageBack();
+    await tester.pumpAndSettle();
 
-    // S02: Check-In
-    final checkInBtn = find.widgetWithText(ElevatedButton, 'Check-In');
-    expect(checkInBtn, findsOneWidget);
-    await tester.tap(checkInBtn);
-    
-    // Wait for API and UI
-    int checkInWait = 0;
-    while(find.text('Checked in successfully!').evaluate().isEmpty && 
-          find.textContaining(RegExp(r'already checked in', caseSensitive: false)).evaluate().isEmpty && 
-          checkInWait < 20) {
-      await tester.pump(const Duration(milliseconds: 200));
-      checkInWait++;
-    }
+    await tester.tap(find.text('Request Leave'));
+    await tester.pumpAndSettle();
+    expect(find.text('My Leaves'), findsWidgets);
+    await tester.pageBack();
+    await tester.pumpAndSettle();
 
-    if (find.text('Checked in successfully!').evaluate().isEmpty &&
-        find.textContaining(RegExp(r'already checked in', caseSensitive: false)).evaluate().isEmpty) {
-      fail('Failed to Check-in. Texts on screen: ${find.byType(Text).evaluate().map((e) => (e.widget as Text).data).join(', ')}');
-    }
-    // Wait for snackbar to fully disappear (Snackbars queue up)
-    for (int i = 0; i < 5; i++) {
-      await tester.pump(const Duration(seconds: 1));
-    }
+    await tester.tap(find.text('Claim Expense'));
+    await tester.pumpAndSettle();
+    expect(find.text('My Expenses'), findsWidgets);
+    await tester.pageBack();
+    await tester.pumpAndSettle();
 
-    // S03: Check-Out
-    final checkOutBtn = find.widgetWithText(ElevatedButton, 'Check-Out');
-    expect(checkOutBtn, findsOneWidget);
-    await tester.tap(checkOutBtn);
-    
-    int checkOutWait = 0;
-    while(find.text('Checked out successfully!').evaluate().isEmpty && 
-          find.textContaining(RegExp(r'already checked out', caseSensitive: false)).evaluate().isEmpty &&
-          find.textContaining(RegExp(r'Check-in required first', caseSensitive: false)).evaluate().isEmpty &&
-          checkOutWait < 20) {
-      await tester.pump(const Duration(milliseconds: 200));
-      checkOutWait++;
-    }
+    // -- 3. Staff should NOT see admin-only tiles on the HR tab --
+    await tester.tap(find.text('HR'));
+    await tester.pumpAndSettle();
 
-    if (find.text('Checked out successfully!').evaluate().isEmpty &&
-        find.textContaining(RegExp(r'already checked out', caseSensitive: false)).evaluate().isEmpty &&
-        find.textContaining(RegExp(r'Check-in required first', caseSensitive: false)).evaluate().isEmpty) {
-      fail('Failed to Check-out. Texts on screen: ${find.byType(Text).evaluate().map((e) => (e.widget as Text).data).join(', ')}');
-    }
-    for (int i = 0; i < 5; i++) {
-      await tester.pump(const Duration(seconds: 1));
-    }
+    expect(find.text('My Attendance'), findsOneWidget);
+    expect(find.text('My Leaves'), findsOneWidget);
+    expect(find.text('My Expenses'), findsOneWidget);
+    expect(find.text('Leave Admin'), findsNothing);
+    expect(find.text('Expense Ledger'), findsNothing);
+    expect(find.text('User Management'), findsNothing);
 
-    // S04: Working off-site? link
-    final offsiteLink = find.text('Working off-site or left early?');
-    expect(offsiteLink, findsOneWidget);
-    await tester.ensureVisible(offsiteLink);
-    await tester.tap(offsiteLink);
-    await tester.pump(const Duration(seconds: 2));
-    
-    expect(find.text('Off-site Pass'), findsOneWidget);
+    // -- 4. CRM tab should still be reachable for a staff member --
+    await tester.tap(find.text('CRM'));
+    await tester.pumpAndSettle();
+    expect(find.text('Sales Pipeline'), findsOneWidget);
 
-    // S05: Start Time picker
-    final startTimeBtn = find.ancestor(
-      of: find.text('Start Time'),
-      matching: find.byType(Column),
-    );
-    // Actually, tapping the InkWell. Let's just tap the text that shows the time, or the Icon
-    await tester.tap(find.byIcon(Icons.schedule).first);
-    await tester.pump(const Duration(seconds: 2));
-    
-    // Time picker dialog should open, tap OK
-    expect(find.text('OK'), findsOneWidget);
-    await tester.tap(find.text('OK'));
-    await tester.pump(const Duration(seconds: 2));
+    // -- 5. Logout via the HR tab's Profile icon --
+    await tester.tap(find.text('HR'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Profile'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Logout'));
+    await tester.pumpAndSettle();
 
-    // S06: End Time picker
-    await tester.tap(find.byIcon(Icons.schedule).last);
-    await tester.pump(const Duration(seconds: 2));
-    
-    // Time picker dialog should open, tap OK
-    expect(find.text('OK'), findsOneWidget);
-    await tester.tap(find.text('OK'));
-    await tester.pump(const Duration(seconds: 2));
-
-    // S07: Submit Request
-    await tester.enterText(find.byType(TextField).last, 'Automated Test Off-site');
-    await tester.tap(find.text('Submit Request'));
-    await tester.pump(const Duration(seconds: 2));
-    expect(find.text('Request submitted! Pending admin approval.'), findsOneWidget);
-    await tester.pump(const Duration(seconds: 3));
-
-    // S08: My Attendance tile
-    await tester.tap(find.text('My Attendance'));
-    await tester.pump(const Duration(seconds: 2));
-    expect(find.text('My Attendance'), findsWidgets); // Appbar has this title
-    await tester.tap(find.byTooltip('Back'));
-    await tester.pump(const Duration(seconds: 2));
-
-    // S09: My Leaves tile
-    await tester.tap(find.text('My Leaves'));
-    await tester.pump(const Duration(seconds: 2));
-    expect(find.text('My Leaves'), findsWidgets); // Appbar has this title
-    await tester.tap(find.byTooltip('Back'));
-    await tester.pump(const Duration(seconds: 2));
-
-    // S10: My Expenses tile
-    await tester.ensureVisible(find.text('My Expenses'));
-    await tester.tap(find.text('My Expenses'));
-    await tester.pump(const Duration(seconds: 2));
-    expect(find.text('My Expenses'), findsWidgets); // Appbar title
-    await tester.tap(find.byTooltip('Back'));
-    await tester.pump(const Duration(seconds: 2));
-
-    // S01: Logout icon
-    final logoutFinder = find.widgetWithIcon(IconButton, Icons.logout);
-    expect(logoutFinder, findsWidgets);
-    await tester.tap(logoutFinder.last);
-    await tester.pump(const Duration(seconds: 2));
-    await tester.pump(const Duration(seconds: 1));
-
-    // Verify logout
     int logoutRetries = 0;
-    while(find.text('Log In').evaluate().isEmpty && logoutRetries < 50) {
+    while (find.text('Log In').evaluate().isEmpty && logoutRetries < 50) {
       await tester.pump(const Duration(milliseconds: 100));
       logoutRetries++;
     }

@@ -6,7 +6,7 @@ import 'package:integration_test/integration_test.dart';
 import 'package:frontend/main.dart' as app;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:sqflite/sqflite.dart' as sqflite;
-import 'package:path/path.dart';
+import 'test_helpers.dart';
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
@@ -28,11 +28,9 @@ void main() {
     await storage.deleteAll();
 
     try {
-      if (sqflite.databaseFactory is sqflite.DatabaseFactory) {
-         final dbPath = await sqflite.getDatabasesPath();
-         final path = p.join(dbPath, 'spacesio.db');
-         await sqflite.deleteDatabase(path);
-      }
+      final dbPath = await sqflite.getDatabasesPath();
+      final path = p.join(dbPath, 'spacesio.db');
+      await sqflite.deleteDatabase(path);
     } catch (_) {}
 
     app.main();
@@ -93,7 +91,7 @@ void main() {
     expect(find.text('Security Setup'), findsOneWidget, reason: 'Should be on PIN Setup screen');
 
     // A12: Complete Setup (empty) -> Error validation
-    await tester.tap(find.text('Complete Setup'));
+    await tester.tap(find.text('Save & Initialize'));
     await tester.pumpAndSettle();
     // Expect some validation error since fields are empty
     expect(find.text('Please fill all fields'), findsWidgets);
@@ -102,31 +100,32 @@ void main() {
     final textFields = find.byType(TextField);
     await tester.enterText(textFields.first, '1111'); // normal pin
     await tester.enterText(textFields.last, '999999');  // ghost mode pin (6 digits required)
-    await tester.tap(find.text('Complete Setup'));
+    await tester.tap(find.text('Save & Initialize'));
     await tester.pumpAndSettle();
     
     int unlockRetries = 0;
-    while(find.text('Unlock').evaluate().isEmpty && unlockRetries < 50) {
+    while(find.text('Session Locked').evaluate().isEmpty && unlockRetries < 50) {
       await tester.pump(const Duration(milliseconds: 100));
       unlockRetries++;
     }
-    expect(find.text('Unlock'), findsOneWidget, reason: 'Should redirect to PIN entry to unlock session');
+    expect(find.text('Session Locked'), findsOneWidget, reason: 'Should redirect to PIN entry to unlock session');
 
     // A13: Unlock (correct)
-    await tester.enterText(find.byType(TextField).first, '1111');
-    await tester.tap(find.text('Unlock'));
+    await enterPinViaNumpad(tester, '1111');
     await tester.pumpAndSettle();
     
     int dashboardRetries = 0;
-    while(find.text('Team Dashboard').evaluate().isEmpty && dashboardRetries < 50) {
+    while(find.text('Command Center').evaluate().isEmpty && dashboardRetries < 50) {
       await tester.pump(const Duration(milliseconds: 100));
       dashboardRetries++;
     }
-    expect(find.text('Team Dashboard'), findsOneWidget, reason: 'Should be on Admin Dashboard');
+    expect(find.text('Command Center'), findsOneWidget, reason: 'Should be on Workspace screen');
 
     // M06 / A16: Logout -> test PIN entry
-    // Navigate to profile or use appbar logout
-    final logoutFinder = find.widgetWithIcon(IconButton, Icons.logout);
+    // Open Profile via the Home AppBar icon, then tap Logout
+    await tester.tap(find.byTooltip('Profile'));
+    await tester.pumpAndSettle();
+    final logoutFinder = find.text('Logout');
     if (logoutFinder.evaluate().isNotEmpty) {
       await tester.ensureVisible(logoutFinder.last);
       await tester.tap(logoutFinder.last);
@@ -148,34 +147,32 @@ void main() {
       await tester.pumpAndSettle();
       
       int pinRetries = 0;
-      while(find.text('Unlock').evaluate().isEmpty && pinRetries < 50) {
+      while(find.text('Session Locked').evaluate().isEmpty && pinRetries < 50) {
         await tester.pump(const Duration(milliseconds: 100));
         pinRetries++;
       }
-      expect(find.text('Unlock'), findsOneWidget);
-      
+      expect(find.text('Session Locked'), findsOneWidget);
+
       // A15: Unlock (wrong) -> Error snackbar
-      await tester.enterText(find.byType(TextField).first, '0000');
-      await tester.tap(find.text('Unlock'));
-      // Do a short pump to allow the request to start and return
-      await tester.pump(const Duration(milliseconds: 100));
+      await enterPinViaNumpad(tester, '0000');
+      // Wait for the 600ms auto-submit debounce plus API round trip
+      await tester.pump(const Duration(milliseconds: 700));
       await tester.pump(const Duration(seconds: 1)); // wait for API error
       // Pump again to start the snackbar animation
       await tester.pump(const Duration(milliseconds: 100));
       expect(find.byType(SnackBar), findsWidgets, reason: 'Wrong PIN should show snackbar');
       await tester.pumpAndSettle(const Duration(seconds: 3));
-      
+
       // A13: Unlock (correct)
-      await tester.enterText(find.byType(TextField).first, '1111');
-      await tester.tap(find.text('Unlock'));
+      await enterPinViaNumpad(tester, '1111');
       await tester.pumpAndSettle();
       
       dashboardRetries = 0;
-      while(find.text('Team Dashboard').evaluate().isEmpty && dashboardRetries < 50) {
+      while(find.text('Command Center').evaluate().isEmpty && dashboardRetries < 50) {
         await tester.pump(const Duration(milliseconds: 100));
         dashboardRetries++;
       }
-      expect(find.text('Team Dashboard'), findsOneWidget);
+      expect(find.text('Command Center'), findsOneWidget);
     }
   });
 }

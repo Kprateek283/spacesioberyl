@@ -123,12 +123,9 @@ class _IamUsersScreenState extends ConsumerState<IamUsersScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('User Management'),
-        backgroundColor: const Color(0xFF0061a4),
-        foregroundColor: Colors.white,
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: _showCreateUserDialog,
-        backgroundColor: const Color(0xFF0061a4),
         child: const Icon(Icons.person_add),
       ),
       body: usersAsync.when(

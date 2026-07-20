@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart';
@@ -11,29 +12,45 @@ final pendingSyncCountProvider = FutureProvider<int>((ref) async {
   return pending.length;
 });
 
+/// Mutations that failed 5 sync attempts and were dropped, so the UI can
+/// surface them instead of silently discarding the user's data.
+final droppedMutationsProvider = StateProvider<List<String>>((ref) => []);
+
 final syncServiceProvider = Provider<SyncService>((ref) {
-  return SyncService(
+  final service = SyncService(
     ref.watch(apiClientProvider),
     onQueueChanged: () => ref.invalidate(pendingSyncCountProvider),
+    onMutationDropped: (endpoint) => ref
+        .read(droppedMutationsProvider.notifier)
+        .update((state) => [...state, endpoint]),
   );
+  ref.onDispose(service.dispose);
+  return service;
 });
 
 class SyncService {
   final ApiClient _apiClient;
   final VoidCallback? onQueueChanged;
+  final ValueChanged<String>? onMutationDropped;
   bool _isSyncing = false;
+  StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
 
-  SyncService(this._apiClient, {this.onQueueChanged}) {
+  SyncService(this._apiClient, {this.onQueueChanged, this.onMutationDropped}) {
     _initConnectivityListener();
   }
 
   void _initConnectivityListener() {
-    Connectivity().onConnectivityChanged.listen((results) {
+    _connectivitySubscription =
+        Connectivity().onConnectivityChanged.listen((results) {
       if (results.contains(ConnectivityResult.mobile) ||
           results.contains(ConnectivityResult.wifi)) {
         _syncOutboxQueue();
       }
     });
+  }
+
+  void dispose() {
+    _connectivitySubscription?.cancel();
   }
 
   Future<void> triggerManualSync() async {
@@ -62,25 +79,18 @@ class SyncService {
 
         if (retryCount >= 5) {
           await dbHelper.removeMutation(id);
+          onMutationDropped?.call(endpoint);
           continue;
         }
 
         try {
           final payload = jsonDecode(payloadString) as Map<String, dynamic>;
 
+          // TODO: replace with a real upload once a generic backend upload
+          // endpoint exists (see issue/01-backend-issues.md).
           if (hasFile && localFilePath != null && fileFieldKey != null) {
-            payload[fileFieldKey] = payload[fileFieldKey] ??
-                MockUploadService.toMockUrl(localFilePath);
+            _setNestedField(payload, fileFieldKey, MockUploadService.toMockUrl(localFilePath));
           }
-
-          payload.forEach((key, value) {
-            if (key.toString().endsWith('_url') &&
-                value is String &&
-                !MockUploadService.isHttpUrl(value) &&
-                value.isNotEmpty) {
-              payload[key] = MockUploadService.toMockUrl(value);
-            }
-          });
 
           if (method.toUpperCase() == 'POST') {
             await _apiClient.post(endpoint, data: payload);
@@ -97,6 +107,32 @@ class SyncService {
     } finally {
       _isSyncing = false;
       onQueueChanged?.call();
+    }
+  }
+
+  /// Sets [value] at a dotted path inside [payload], where numeric segments
+  /// index into lists, e.g. 'updates.0.photo_url' -> payload['updates'][0]['photo_url'].
+  void _setNestedField(Map<String, dynamic> payload, String dottedKey, String value) {
+    final segments = dottedKey.split('.');
+    dynamic current = payload;
+    for (var i = 0; i < segments.length - 1; i++) {
+      final segment = segments[i];
+      final index = int.tryParse(segment);
+      if (index != null && current is List) {
+        current = current[index];
+      } else if (current is Map) {
+        current = current[segment];
+      } else {
+        return; // Path doesn't resolve; nothing to set.
+      }
+    }
+
+    final lastSegment = segments.last;
+    final lastIndex = int.tryParse(lastSegment);
+    if (lastIndex != null && current is List) {
+      current[lastIndex] = value;
+    } else if (current is Map) {
+      current[lastSegment] = value;
     }
   }
 }

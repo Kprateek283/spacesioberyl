@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:frontend/main.dart' as app;
+import 'test_helpers.dart';
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
@@ -35,29 +36,26 @@ void main() {
       await tester.pumpAndSettle();
     }
 
-    // 3. PIN Entry
-    final pin = '1111';
-    // The PIN screen uses a standard TextField with obscureText: true
+    // 3. PIN Entry (numpad lock screen)
     int pinRetries = 0;
-    while (find.byType(TextField).evaluate().isEmpty && pinRetries < 50) {
+    while (find.text('Session Locked').evaluate().isEmpty && pinRetries < 50) {
       await tester.pump(const Duration(milliseconds: 100));
       pinRetries++;
     }
-    if (find.byType(TextField).evaluate().isNotEmpty) {
-      await tester.enterText(find.byType(TextField).first, pin);
-      await tester.tap(find.text('Unlock'));
+    if (find.text('Session Locked').evaluate().isNotEmpty) {
+      await enterPinViaNumpad(tester, '1111');
       await tester.pumpAndSettle();
     }
 
     // Wait for Dashboard to appear
     int dashRetries = 0;
-    while (find.text('CRM').evaluate().isEmpty && dashRetries < 50) {
+    while (find.text('Command Center').evaluate().isEmpty && dashRetries < 50) {
       await tester.pump(const Duration(milliseconds: 100));
       dashRetries++;
     }
 
-    // 4. Navigate to Logistics Module
-    await tester.tap(find.byIcon(Icons.local_shipping));
+    // 4. Navigate to Logistics tab directly
+    await tester.tap(find.text('Logistics'));
     await tester.pumpAndSettle();
 
     // Tap Orders tile in the Hub

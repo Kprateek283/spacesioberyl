@@ -10,6 +10,27 @@ class SyncBanner extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final pendingAsync = ref.watch(pendingSyncCountProvider);
     final syncService = ref.watch(syncServiceProvider);
+    final dropped = ref.watch(droppedMutationsProvider);
+
+    if (dropped.isNotEmpty) {
+      return MaterialBanner(
+        backgroundColor: Colors.red.shade50,
+        content: Text(
+          '${dropped.length} offline update${dropped.length == 1 ? '' : 's'} '
+          'could not be saved after several attempts and ${dropped.length == 1 ? 'was' : 'were'} discarded. '
+          'Please redo: ${dropped.join(', ')}',
+          style: const TextStyle(color: Colors.red),
+        ),
+        leading: const Icon(Icons.error_outline, color: Colors.red),
+        actions: [
+          TextButton(
+            onPressed: () =>
+                ref.read(droppedMutationsProvider.notifier).state = [],
+            child: const Text('Dismiss'),
+          ),
+        ],
+      );
+    }
 
     return pendingAsync.when(
       data: (count) {

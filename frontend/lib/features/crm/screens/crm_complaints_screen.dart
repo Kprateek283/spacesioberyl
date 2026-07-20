@@ -1,4 +1,3 @@
-// ignore_for_file: use_build_context_synchronously
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/utils/api_parse.dart';
@@ -76,12 +75,15 @@ class _CrmComplaintsScreenState extends ConsumerState<CrmComplaintsScreen> {
                         priority: priority,
                       );
                   if (mounted) {
+                    // ignore: use_build_context_synchronously
                     Navigator.pop(ctx);
                     ref.invalidate(complaintsProvider);
+                    // ignore: use_build_context_synchronously
                     UiFeedback.success(context, 'Complaint filed');
                   }
                 } catch (e) {
-                  UiFeedback.parsedError(context, e);
+                  // ignore: use_build_context_synchronously
+                  if (mounted) UiFeedback.parsedError(context, e);
                 } finally {
                   setModal(() => _creating = false);
                 }
@@ -100,12 +102,9 @@ class _CrmComplaintsScreenState extends ConsumerState<CrmComplaintsScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Support Complaints'),
-        backgroundColor: const Color(0xFF0061a4),
-        foregroundColor: Colors.white,
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: _showCreateDialog,
-        backgroundColor: const Color(0xFF0061a4),
         child: const Icon(Icons.add),
       ),
       body: complaintsAsync.when(
@@ -141,9 +140,11 @@ class _CrmComplaintsScreenState extends ConsumerState<CrmComplaintsScreen> {
                                     .read(crmServiceProvider)
                                     .resolveComplaint(id);
                                 ref.invalidate(complaintsProvider);
-                                UiFeedback.success(context, 'Resolved');
+                                // ignore: use_build_context_synchronously
+                                if (mounted) UiFeedback.success(context, 'Resolved');
                               } catch (e) {
-                                UiFeedback.parsedError(context, e);
+                                // ignore: use_build_context_synchronously
+                                if (mounted) UiFeedback.parsedError(context, e);
                               }
                             },
                           ),
