@@ -1,14 +1,28 @@
-// ignore_for_file: use_build_context_synchronously
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../core/local_db/database_helper.dart';
 import '../../../core/providers/cache_provider.dart';
+import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/ui_feedback.dart';
 import '../../../shared/widgets/async_error_view.dart';
 import '../../../shared/widgets/dialog_action_buttons.dart';
 import '../../../shared/widgets/dialog_fields.dart';
 import '../services/crm_service.dart';
 import 'crm_lead_detail_screen.dart';
+import 'crm_followups_screen.dart';
+import 'crm_complaints_screen.dart';
+
+/// The five backend-supported statuses grouped as (near-)terminal for
+/// visual weight, plus the four intermediate mid-pipeline stages.
+const _kanbanColumns = [
+  ('new', 'New'),
+  ('first_call', 'First Call'),
+  ('pdf_sent', 'PDF Sent'),
+  ('sample_sent', 'Sample Sent'),
+  ('site_visit', 'Site Visit'),
+  ('negotiation', 'Negotiation'),
+  ('finalized', 'Finalized'),
+  ('lost', 'Lost'),
+];
 
 class CrmLeadsScreen extends ConsumerStatefulWidget {
   const CrmLeadsScreen({super.key});
@@ -18,7 +32,6 @@ class CrmLeadsScreen extends ConsumerStatefulWidget {
 }
 
 class _CrmLeadsScreenState extends ConsumerState<CrmLeadsScreen> {
-  String filterStatus = 'all';
   bool isCreatingLead = false;
 
   @override
@@ -47,10 +60,7 @@ class _CrmLeadsScreenState extends ConsumerState<CrmLeadsScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              DialogTextField(
-                controller: nameController,
-                labelText: 'Client Name',
-              ),
+              DialogTextField(controller: nameController, labelText: 'Client Name'),
               const SizedBox(height: 12),
               DialogTextField(
                 controller: phoneController,
@@ -88,21 +98,19 @@ class _CrmLeadsScreenState extends ConsumerState<CrmLeadsScreen> {
                 UiFeedback.error(context, 'Name and phone are required');
                 return;
               }
-
               try {
                 setState(() => isCreatingLead = true);
                 await ref.read(crmServiceProvider).createLead(
                       clientName: nameController.text,
                       clientPhone: phoneController.text,
-                      clientEmail:
-                          emailController.text.isEmpty ? null : emailController.text,
+                      clientEmail: emailController.text.isEmpty ? null : emailController.text,
                       source: selectedSource,
                     );
-
                 if (mounted) {
+                  // ignore: use_build_context_synchronously
                   Navigator.pop(ctx);
                   await refreshLeadsCache(ref);
-                  UiFeedback.success(context, 'Lead created successfully');
+                  if (mounted) UiFeedback.success(context, 'Lead created successfully');
                 }
               } catch (e) {
                 if (mounted) UiFeedback.parsedError(context, e);
@@ -116,71 +124,96 @@ class _CrmLeadsScreenState extends ConsumerState<CrmLeadsScreen> {
     );
   }
 
+  Future<void> _moveLeadToStatus(Map<String, dynamic> lead, String newStatus) async {
+    final id = int.tryParse('${lead['id']}');
+    if (id == null || lead['status'] == newStatus) return;
+
+    String? lostReason;
+    if (newStatus == 'lost') {
+      final reasonController = TextEditingController();
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Mark Lead as Lost'),
+          content: DialogTextField(
+            controller: reasonController,
+            labelText: 'Reason',
+            maxLines: 3,
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+            ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Confirm')),
+          ],
+        ),
+      );
+      if (confirmed != true || reasonController.text.trim().isEmpty) return;
+      lostReason = reasonController.text.trim();
+    }
+
+    try {
+      await ref.read(crmServiceProvider).updateLeadStatus(id, newStatus, lostReason: lostReason);
+      if (mounted) UiFeedback.success(context, 'Lead moved to ${newStatus.replaceAll('_', ' ')}');
+    } catch (e) {
+      if (mounted) UiFeedback.parsedError(context, e);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final leadsAsync = ref.watch(cachedLeadsProvider);
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('CRM Leads'),
-        backgroundColor: const Color(0xFF0061a4),
-        foregroundColor: Colors.white,
+        title: const Text('Sales Pipeline'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.phone_callback),
+            tooltip: 'Follow-ups',
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const CrmFollowupsScreen()),
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.support_agent),
+            tooltip: 'Complaints',
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const CrmComplaintsScreen()),
+            ),
+          ),
+        ],
       ),
       body: leadsAsync.when(
-        data: (leads) {
-          final filteredLeads = filterStatus == 'all'
-              ? leads
-              : leads.where((lead) => lead['status'] == filterStatus).toList();
-
-          return RefreshIndicator(
-            onRefresh: () => refreshLeadsCache(ref),
-            child: CustomScrollView(
-              slivers: [
-                SliverToBoxAdapter(
-                  child: SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    padding: const EdgeInsets.all(16),
-                    child: Row(
-                      children: [
-                        _buildFilterChip('All', 'all'),
-                        const SizedBox(width: 8),
-                        _buildFilterChip('New', 'new'),
-                        const SizedBox(width: 8),
-                        _buildFilterChip('First Call', 'first_call'),
-                        const SizedBox(width: 8),
-                        _buildFilterChip('PDF Sent', 'pdf_sent'),
-                        const SizedBox(width: 8),
-                        _buildFilterChip('Sample Sent', 'sample_sent'),
-                        const SizedBox(width: 8),
-                        _buildFilterChip('Site Visit', 'site_visit'),
-                        const SizedBox(width: 8),
-                        _buildFilterChip('Negotiation', 'negotiation'),
-                        const SizedBox(width: 8),
-                        _buildFilterChip('Finalized', 'finalized'),
-                        const SizedBox(width: 8),
-                        _buildFilterChip('Lost', 'lost'),
-                      ],
-                    ),
-                  ),
-                ),
-                if (filteredLeads.isEmpty)
-                  const SliverFillRemaining(
-                    child: Center(child: Text('No leads found')),
-                  )
-                else
-                  SliverList(
-                    delegate: SliverChildBuilderDelegate(
-                      (ctx, index) => _buildLeadCard(filteredLeads[index]),
-                      childCount: filteredLeads.length,
-                    ),
-                  ),
-              ],
+        data: (leads) => RefreshIndicator(
+          onRefresh: () => refreshLeadsCache(ref),
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: _kanbanColumns.map((col) {
+                final (statusKey, label) = col;
+                final columnLeads = leads.where((l) => l['status'] == statusKey).toList();
+                return _KanbanColumn(
+                  statusKey: statusKey,
+                  label: label,
+                  leads: columnLeads,
+                  onLeadDropped: _moveLeadToStatus,
+                  onCardTap: (lead) {
+                    final id = int.tryParse('${lead['id']}');
+                    if (id == null) return;
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => CrmLeadDetailScreen(leadId: id)),
+                    );
+                  },
+                );
+              }).toList(),
             ),
-          );
-        },
-        loading: () => const Center(
-          child: CircularProgressIndicator(color: Color(0xFF0061a4)),
+          ),
         ),
+        loading: () => const Center(child: CircularProgressIndicator()),
         error: (err, _) => AsyncErrorView(
           error: err,
           onRetry: () => ref.invalidate(cachedLeadsProvider),
@@ -188,120 +221,144 @@ class _CrmLeadsScreenState extends ConsumerState<CrmLeadsScreen> {
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: isCreatingLead ? null : _showCreateLeadDialog,
-        backgroundColor: const Color(0xFF0061a4),
+        tooltip: 'Add Lead',
         child: const Icon(Icons.add),
       ),
     );
   }
+}
 
-  Widget _buildFilterChip(String label, String status) {
-    final isSelected = filterStatus == status;
-    return FilterChip(
-      label: Text(label),
-      selected: isSelected,
-      onSelected: (selected) => setState(() => filterStatus = status),
-      selectedColor: const Color(0xFF0061a4),
-      labelStyle: TextStyle(color: isSelected ? Colors.white : Colors.black),
-    );
+class _KanbanColumn extends StatelessWidget {
+  final String statusKey;
+  final String label;
+  final List<Map<String, dynamic>> leads;
+  final void Function(Map<String, dynamic> lead, String newStatus) onLeadDropped;
+  final void Function(Map<String, dynamic> lead) onCardTap;
+
+  const _KanbanColumn({
+    required this.statusKey,
+    required this.label,
+    required this.leads,
+    required this.onLeadDropped,
+    required this.onCardTap,
+  });
+
+  Color get _accentColor {
+    if (statusKey == 'finalized') return AppColors.primary;
+    if (statusKey == 'lost') return AppColors.error;
+    return AppColors.onSurfaceVariant;
   }
 
-  Widget _buildLeadCard(Map<String, dynamic> lead) {
-    return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 16),
+      child: DragTarget<Map<String, dynamic>>(
+        onAcceptWithDetails: (details) => onLeadDropped(details.data, statusKey),
+        builder: (context, candidateData, rejectedData) {
+          final isHovering = candidateData.isNotEmpty;
+          return Container(
+            width: 280,
+            decoration: BoxDecoration(
+              color: isHovering ? AppColors.surfaceContainerLow : AppColors.surfaceContainer,
+              borderRadius: BorderRadius.circular(12),
+              border: isHovering ? Border.all(color: AppColors.primary, width: 2) : null,
+            ),
+            padding: const EdgeInsets.all(8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                  child: Row(
                     children: [
-                      Text(
-                        lead['client_name'] ?? 'Unknown',
-                        style: const TextStyle(
-                            fontSize: 16, fontWeight: FontWeight.bold),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        lead['client_phone'] ?? 'N/A',
-                        style: const TextStyle(fontSize: 14, color: Colors.grey),
+                      Container(width: 8, height: 8, decoration: BoxDecoration(color: _accentColor, shape: BoxShape.circle)),
+                      const SizedBox(width: 8),
+                      Text(label, style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold)),
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(color: AppColors.surfaceContainerLowest, borderRadius: BorderRadius.circular(999)),
+                        child: Text('${leads.length}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                       ),
                     ],
                   ),
                 ),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: _getStatusColor(lead['status']),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(
-                    (lead['status'] ?? 'unknown')
-                        .toString()
-                        .replaceAll('_', ' ')
-                        .toUpperCase(),
-                    style: const TextStyle(color: Colors.white, fontSize: 12),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(minHeight: 80),
+                  child: Column(
+                    children: leads.map((lead) {
+                      return Draggable<Map<String, dynamic>>(
+                        data: lead,
+                        feedback: Material(
+                          elevation: 4,
+                          borderRadius: BorderRadius.circular(12),
+                          child: SizedBox(width: 260, child: _LeadCard(lead: lead, onTap: () {})),
+                        ),
+                        childWhenDragging: Opacity(opacity: 0.3, child: _LeadCard(lead: lead, onTap: () {})),
+                        child: _LeadCard(lead: lead, onTap: () => onCardTap(lead)),
+                      );
+                    }).toList(),
                   ),
                 ),
               ],
             ),
-            if (lead['client_email'] != null) ...[
-              const SizedBox(height: 8),
-              Text(
-                lead['client_email'].toString(),
-                style: const TextStyle(fontSize: 12, color: Colors.blue),
-              ),
-            ],
-            const SizedBox(height: 12),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                TextButton(
-                  onPressed: () {
-                    final id = int.tryParse('${lead['id']}');
-                    if (id == null) return;
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => CrmLeadDetailScreen(leadId: id),
-                      ),
-                    );
-                  },
-                  child: const Text('View'),
-                ),
-              ],
-            ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }
+}
 
-  Color _getStatusColor(String? status) {
-    switch (status) {
-      case 'new':
-        return Colors.lightBlue;
-      case 'first_call':
-        return Colors.orange;
-      case 'pdf_sent':
-        return Colors.blue;
-      case 'sample_sent':
-        return Colors.purple;
-      case 'site_visit':
-        return Colors.teal;
-      case 'negotiation':
-        return Colors.amber;
-      case 'finalized':
-        return Colors.green;
-      case 'lost':
-        return Colors.red;
-      default:
-        return Colors.grey;
-    }
+class _LeadCard extends StatelessWidget {
+  final Map<String, dynamic> lead;
+  final VoidCallback onTap;
+
+  const _LeadCard({required this.lead, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final source = (lead['source'] ?? '').toString();
+    return Card(
+      margin: const EdgeInsets.symmetric(vertical: 4),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                lead['client_name'] ?? 'Unknown',
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 4),
+              Text(
+                lead['client_phone'] ?? 'N/A',
+                style: TextStyle(fontSize: 12, color: AppColors.onSurfaceVariant),
+              ),
+              if (source.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: AppColors.secondaryContainer,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(
+                    source.replaceAll('_', ' ').toUpperCase(),
+                    style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: AppColors.onSecondaryContainer),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }

@@ -1,12 +1,11 @@
-// ignore_for_file: use_build_context_synchronously
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/utils/api_parse.dart';
 import '../../../core/utils/ui_feedback.dart';
 import '../../../shared/widgets/dialog_action_buttons.dart';
 import '../../../shared/widgets/dialog_fields.dart';
-import '../../../core/widgets/ghost_mode_aware.dart';
 import '../services/crm_service.dart';
+import 'quotation_builder_screen.dart';
 
 class CrmLeadDetailScreen extends ConsumerStatefulWidget {
   final int leadId;
@@ -94,147 +93,15 @@ class _CrmLeadDetailScreenState extends ConsumerState<CrmLeadDetailScreen> {
   }
 
   Future<void> _createQuotation() async {
-    String paymentTerm = '100_advance';
-    
-    final List<Map<String, TextEditingController>> items = [
-      {
-        'itemName': TextEditingController(),
-        'quantity': TextEditingController(),
-        'price': TextEditingController(),
-      }
-    ];
-
-    await showDialog(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDialogState) => AlertDialog(
-          title: const Text('Create Quotation'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                DialogDropdownField<String>(
-                  value: paymentTerm,
-                  items: const [
-                    DropdownMenuItem(value: '100_advance', child: Text('100% Advance')),
-                    DropdownMenuItem(value: '50_advance', child: Text('50% Advance')),
-                    DropdownMenuItem(value: 'cash', child: Text('Cash (Ghost Mode)')),
-                  ],
-                  onChanged: (v) {
-                    if (v != null) {
-                      setDialogState(() => paymentTerm = v);
-                    }
-                  },
-                ),
-                const SizedBox(height: 12),
-                const Divider(),
-                ...items.asMap().entries.map((entry) {
-                  final idx = entry.key;
-                  final item = entry.value;
-                  return Column(
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text('Item ${idx + 1}', style: const TextStyle(fontWeight: FontWeight.bold)),
-                          if (items.length > 1)
-                            IconButton(
-                              icon: const Icon(Icons.remove_circle, color: Colors.red),
-                              onPressed: () => setDialogState(() => items.removeAt(idx)),
-                            ),
-                        ],
-                      ),
-                      DialogTextField(
-                        controller: item['itemName']!,
-                        labelText: 'Item Name',
-                      ),
-                      const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: DialogTextField(
-                              controller: item['quantity']!,
-                              labelText: 'Qty',
-                              keyboardType: TextInputType.number,
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: paymentTerm == 'cash'
-                              ? GhostModeAware(
-                                  child: DialogTextField(
-                                    controller: item['price']!,
-                                    labelText: 'Unit Price',
-                                    keyboardType: TextInputType.number,
-                                  ),
-                                )
-                              : DialogTextField(
-                                  controller: item['price']!,
-                                  labelText: 'Unit Price',
-                                  keyboardType: TextInputType.number,
-                                ),
-                          ),
-                        ],
-                      ),
-                      const Divider(),
-                    ],
-                  );
-                }),
-                TextButton.icon(
-                  onPressed: () {
-                    setDialogState(() {
-                      items.add({
-                        'itemName': TextEditingController(),
-                        'quantity': TextEditingController(),
-                        'price': TextEditingController(),
-                      });
-                    });
-                  },
-                  icon: const Icon(Icons.add),
-                  label: const Text('Add Item'),
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            DialogActionButtons(
-              onCancel: () => Navigator.pop(ctx),
-              submitText: 'Create',
-              onSubmit: () async {
-                final lineItems = <Map<String, dynamic>>[];
-                for (final item in items) {
-                  final qty = int.tryParse(item['quantity']!.text);
-                  final price = double.tryParse(item['price']!.text);
-                  if (item['itemName']!.text.trim().isEmpty || qty == null || price == null) {
-                    UiFeedback.error(context, 'Invalid item details in list');
-                    return;
-                  }
-                  lineItems.add({
-                    'item_name': item['itemName']!.text.trim(),
-                    'quantity': qty,
-                    'unit_price': price,
-                  });
-                }
-                
-                Navigator.pop(ctx);
-                try {
-                  await ref.read(crmServiceProvider).createQuotation(
-                        leadId: widget.leadId,
-                        paymentTermType: paymentTerm,
-                        taxRate: paymentTerm == 'cash' ? 0.0 : 18.0,
-                        lineItems: lineItems,
-                      );
-                  await _load();
-                  if (mounted) UiFeedback.success(context, 'Quotation created');
-                } catch (e) {
-                  if (mounted) UiFeedback.parsedError(context, e);
-                }
-              },
-            ),
-          ],
-        ),
+    final lead = _lead ?? {};
+    final clientName = ApiParse.field(lead, ['client_name'], fallback: 'Lead');
+    final created = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => QuotationBuilderScreen(leadId: widget.leadId, clientName: clientName),
       ),
     );
+    if (created == true) await _load();
   }
 
   Future<void> _approveQuotation(int quotationId) async {
@@ -265,8 +132,6 @@ class _CrmLeadDetailScreenState extends ConsumerState<CrmLeadDetailScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(name),
-        backgroundColor: const Color(0xFF0061a4),
-        foregroundColor: Colors.white,
       ),
       body: RefreshIndicator(
         onRefresh: _load,

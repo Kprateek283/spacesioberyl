@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import '../providers/pipeline_provider.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../shared/widgets/module_tile.dart';
+import '../../crm/screens/crm_leads_screen.dart';
+import '../../crm/screens/crm_lead_detail_screen.dart';
 
 class PipelineScreen extends ConsumerWidget {
   const PipelineScreen({super.key});
@@ -33,11 +35,9 @@ class PipelineScreen extends ConsumerWidget {
         },
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          // Open new lead dialog/screen
-          // For now, this is a placeholder
-        },
+        onPressed: () => pushScreen(context, const CrmLeadsScreen()),
         backgroundColor: AppColors.primary,
+        tooltip: 'Add Lead',
         child: const Icon(Icons.add, color: AppColors.onPrimary),
       ),
     );
@@ -89,7 +89,12 @@ class _PipelineColumn extends StatelessWidget {
                   margin: const EdgeInsets.only(bottom: 12),
                   child: InkWell(
                     onTap: () {
-                      context.go('/pipeline/project/${p['id']}');
+                      final id = int.tryParse('${p['id']}');
+                      if (id == null) return;
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => CrmLeadDetailScreen(leadId: id)),
+                      );
                     },
                     borderRadius: BorderRadius.circular(12),
                     child: Padding(

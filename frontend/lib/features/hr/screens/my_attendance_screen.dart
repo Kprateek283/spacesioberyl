@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import '../../../core/theme/app_colors.dart';
 import '../../../core/local_db/database_helper.dart';
 import '../../../core/utils/ui_feedback.dart';
 import '../../../shared/widgets/async_error_view.dart';
@@ -90,8 +91,7 @@ class _MyAttendanceScreenState extends ConsumerState<MyAttendanceScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('My Attendance'),
-        backgroundColor: const Color(0xFF0061a4),
-        foregroundColor: Colors.white,
+
         elevation: 0,
       ),
       body: attendanceAsync.when(
@@ -110,11 +110,11 @@ class _MyAttendanceScreenState extends ConsumerState<MyAttendanceScreen> {
                   margin: const EdgeInsets.all(16),
                   padding: const EdgeInsets.all(24),
                   decoration: BoxDecoration(
-                    color: isCheckedIn ? const Color(0xFF4CAF50) : const Color(0xFFFF9800),
+                    color: isCheckedIn ? AppColors.primary : AppColors.secondary,
                     borderRadius: BorderRadius.circular(12),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.1),
+                        color: Colors.black.withValues(alpha: 0.1),
                         blurRadius: 8,
                         offset: const Offset(0, 2),
                       ),
@@ -167,8 +167,6 @@ class _MyAttendanceScreenState extends ConsumerState<MyAttendanceScreen> {
                           child: ElevatedButton.icon(
                             onPressed: isProcessing ? null : _handleCheckIn,
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF4CAF50),
-                              foregroundColor: Colors.white,
                               padding: const EdgeInsets.symmetric(vertical: 16),
                             ),
                             icon: const Icon(Icons.login),
@@ -180,8 +178,8 @@ class _MyAttendanceScreenState extends ConsumerState<MyAttendanceScreen> {
                           child: ElevatedButton.icon(
                             onPressed: isProcessing ? null : _handleCheckOut,
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFFFF9800),
-                              foregroundColor: Colors.white,
+                              backgroundColor: AppColors.secondary,
+                              foregroundColor: AppColors.onSecondary,
                               padding: const EdgeInsets.symmetric(vertical: 16),
                             ),
                             icon: const Icon(Icons.logout),
@@ -233,7 +231,7 @@ class _MyAttendanceScreenState extends ConsumerState<MyAttendanceScreen> {
           );
         },
         loading: () => const Center(
-          child: CircularProgressIndicator(color: Color(0xFF0061a4)),
+          child: CircularProgressIndicator(),
         ),
         error: (err, stack) => AsyncErrorView(
           error: err,
@@ -264,7 +262,7 @@ class _MyAttendanceScreenState extends ConsumerState<MyAttendanceScreen> {
                 const SizedBox(height: 4),
                 Text(
                   _formatTime(entry['timestamp']),
-                  style: const TextStyle(fontSize: 14, color: Colors.grey),
+                  style: TextStyle(fontSize: 14, color: AppColors.onSurfaceVariant),
                 ),
               ],
             ),
@@ -272,14 +270,14 @@ class _MyAttendanceScreenState extends ConsumerState<MyAttendanceScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               decoration: BoxDecoration(
                 color: entry['type'] == 'check_in'
-                    ? const Color(0xFF4CAF50).withOpacity(0.2)
-                    : const Color(0xFFFF9800).withOpacity(0.2),
+                    ? AppColors.primary.withValues(alpha: 0.15)
+                    : AppColors.secondary.withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(20),
               ),
               child: Text(
                 entry['type'] == 'check_in' ? 'IN' : 'OUT',
                 style: TextStyle(
-                  color: entry['type'] == 'check_in' ? Colors.green : Colors.orange,
+                  color: entry['type'] == 'check_in' ? AppColors.primary : AppColors.secondary,
                   fontWeight: FontWeight.bold,
                 ),
               ),

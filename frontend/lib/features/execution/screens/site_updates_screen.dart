@@ -190,9 +190,6 @@ class _SiteUpdatesScreenState extends ConsumerState<SiteUpdatesScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Site Updates'),
-        backgroundColor: const Color(0xFF0061a4),
-        foregroundColor: Colors.white,
-        elevation: 0,
       ),
       body: updatesAsync.when(
         data: (updates) {
@@ -213,7 +210,7 @@ class _SiteUpdatesScreenState extends ConsumerState<SiteUpdatesScreen> {
                 );
         },
         loading: () => const Center(
-          child: CircularProgressIndicator(color: Color(0xFF0061a4)),
+          child: CircularProgressIndicator(),
         ),
         error: (err, stack) => AsyncErrorView(
           error: err,
@@ -222,7 +219,6 @@ class _SiteUpdatesScreenState extends ConsumerState<SiteUpdatesScreen> {
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: isSubmitting ? null : _showCreateUpdateDialog,
-        backgroundColor: const Color(0xFF0061a4),
         child: const Icon(Icons.add),
       ),
     );

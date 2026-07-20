@@ -112,12 +112,14 @@ class CrmService {
     required String paymentTermType,
     required double taxRate,
     required List<Map<String, dynamic>> lineItems,
+    String? customPdfUrl,
   }) async {
     await _api.createQuotation(
       leadId: leadId,
       paymentTermType: paymentTermType,
       taxRate: taxRate,
       lineItems: lineItems,
+      customPdfUrl: customPdfUrl,
     );
   }
 

@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/providers/cache_provider.dart';
+import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/form_validators.dart';
 import '../../../core/utils/ui_feedback.dart';
 import '../../../shared/widgets/async_error_view.dart';
@@ -139,8 +140,7 @@ class _InstallersListScreenState extends ConsumerState<InstallersListScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Installers'),
-        backgroundColor: const Color(0xFF0061a4),
-        foregroundColor: Colors.white,
+
         elevation: 0,
       ),
       body: installersAsync.when(
@@ -190,7 +190,7 @@ class _InstallersListScreenState extends ConsumerState<InstallersListScreen> {
           );
         },
         loading: () => const Center(
-          child: CircularProgressIndicator(color: Color(0xFF0061a4)),
+          child: CircularProgressIndicator(),
         ),
         error: (err, stack) => AsyncErrorView(
           error: err,
@@ -199,7 +199,6 @@ class _InstallersListScreenState extends ConsumerState<InstallersListScreen> {
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: isCreatingInstaller ? null : _showCreateInstallerDialog,
-        backgroundColor: const Color(0xFF0061a4),
         child: const Icon(Icons.add),
       ),
     );
@@ -213,9 +212,9 @@ class _InstallersListScreenState extends ConsumerState<InstallersListScreen> {
       onSelected: (selected) {
         setState(() => filterExpertise = expertise);
       },
-      selectedColor: const Color(0xFF0061a4),
+      selectedColor: AppColors.primaryContainer,
       labelStyle: TextStyle(
-        color: isSelected ? Colors.white : Colors.black,
+        color: isSelected ? AppColors.onPrimaryContainer : AppColors.onSurface,
       ),
     );
   }
@@ -253,13 +252,13 @@ class _InstallersListScreenState extends ConsumerState<InstallersListScreen> {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF0061a4).withOpacity(0.1),
+                    color: AppColors.primary.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(
                     '₹${(installer['standard_rate'] as num?)?.toStringAsFixed(0) ?? '0'}/hr',
-                    style: const TextStyle(
-                      color: Color(0xFF0061a4),
+                    style: TextStyle(
+                      color: AppColors.primary,
                       fontWeight: FontWeight.bold,
                       fontSize: 12,
                     ),

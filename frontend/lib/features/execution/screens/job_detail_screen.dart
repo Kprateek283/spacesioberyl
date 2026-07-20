@@ -1,4 +1,3 @@
-// ignore_for_file: use_build_context_synchronously
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/utils/api_parse.dart';
@@ -103,9 +102,12 @@ class _JobDetailScreenState extends ConsumerState<JobDetailScreen> {
                       agreedInstallerPrice: price,
                       estimatedCompletionDate: dateCtrl.text.trim(),
                     );
-                UiFeedback.success(context, 'Installer assigned');
+                if (mounted) {
+                  UiFeedback.success(context, 'Installer assigned');
+                  await _load();
+                }
               } catch (e) {
-                UiFeedback.parsedError(context, e);
+                if (mounted) UiFeedback.parsedError(context, e);
               }
             },
           ),
@@ -119,10 +121,10 @@ class _JobDetailScreenState extends ConsumerState<JobDetailScreen> {
       final svc = ref.read(executionServiceProvider);
       if (action == 'check-in') {
         await svc.contractorCheckIn(widget.jobId, verificationNotes: 'Manual Check-in via App');
-        UiFeedback.success(context, 'Checked in');
+        if (mounted) UiFeedback.success(context, 'Checked in');
       } else if (action == 'check-out') {
         await svc.contractorCheckOut(widget.jobId);
-        UiFeedback.success(context, 'Checked out');
+        if (mounted) UiFeedback.success(context, 'Checked out');
       } else if (action == 'payment') {
         final amtCtrl = TextEditingController();
         final refCtrl = TextEditingController();
@@ -172,15 +174,30 @@ class _JobDetailScreenState extends ConsumerState<JobDetailScreen> {
                   submitText: 'Record',
                   onSubmit: () async {
                     final amt = double.tryParse(amtCtrl.text);
-                    if (amt == null) return;
+                    if (amt == null) {
+                      UiFeedback.error(context, 'Enter a valid amount');
+                      return;
+                    }
                     Navigator.pop(ctx);
-                    await svc.recordContractorPayment(
-                      jobId: widget.jobId,
-                      amount: amt,
-                      paymentType: pType,
-                      paymentMode: pMode,
-                      transactionReference: refCtrl.text,
-                    );
+                    // Navigator.pop resolves the outer `await showDialog(...)`
+                    // immediately, so this call must handle its own
+                    // success/failure feedback rather than relying on the
+                    // caller's try/catch below.
+                    try {
+                      await svc.recordContractorPayment(
+                        jobId: widget.jobId,
+                        amount: amt,
+                        paymentType: pType,
+                        paymentMode: pMode,
+                        transactionReference: refCtrl.text,
+                      );
+                      if (mounted) {
+                        UiFeedback.success(context, 'Payment recorded');
+                        await _load();
+                      }
+                    } catch (e) {
+                      if (mounted) UiFeedback.parsedError(context, e);
+                    }
                   },
                 ),
               ],
@@ -205,8 +222,6 @@ class _JobDetailScreenState extends ConsumerState<JobDetailScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text('Job #${widget.jobId}'),
-        backgroundColor: const Color(0xFF0061a4),
-        foregroundColor: Colors.white,
       ),
       body: RefreshIndicator(
         onRefresh: _load,

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/api_parse.dart';
 import '../../../shared/widgets/async_error_view.dart';
 import '../services/hr_service.dart';
@@ -29,8 +30,6 @@ class AdminExpensesScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Expense Ledger'),
-        backgroundColor: const Color(0xFF0061a4),
-        foregroundColor: Colors.white,
       ),
       body: expensesAsync.when(
         data: (items) {
@@ -50,8 +49,8 @@ class AdminExpensesScreen extends ConsumerWidget {
                 final date = ApiParse.field(e, ['expense_date']);
                 return ListTile(
                   leading: CircleAvatar(
-                    backgroundColor: const Color(0xFF0061a4),
-                    child: Text('₹', style: TextStyle(color: Colors.white)),
+                    backgroundColor: AppColors.primary,
+                    child: const Text('₹', style: TextStyle(color: Colors.white)),
                   ),
                   title: Text('₹${amount.toStringAsFixed(0)} — $ctx'),
                   subtitle: Text('Paid by: $person · ${_fmt(date)}'),

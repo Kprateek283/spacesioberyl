@@ -80,8 +80,6 @@ class _ClientSignoffScreenState extends ConsumerState<ClientSignoffScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Client Sign-off'),
-        backgroundColor: const Color(0xFF0061a4),
-        foregroundColor: Colors.white,
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
@@ -104,10 +102,10 @@ class _ClientSignoffScreenState extends ConsumerState<ClientSignoffScreen> {
             },
           ),
           if (_signoffUrl != null)
-            Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: Text('URL: $_signoffUrl',
-                  style: const TextStyle(fontSize: 11, color: Colors.grey)),
+            const Padding(
+              padding: EdgeInsets.only(top: 8),
+              child: Text('Signature captured, will upload on submit.',
+                  style: TextStyle(fontSize: 11, color: Colors.grey)),
             ),
           const SizedBox(height: 16),
           DialogDropdownField<String>(
@@ -130,8 +128,6 @@ class _ClientSignoffScreenState extends ConsumerState<ClientSignoffScreen> {
           ElevatedButton(
             onPressed: _submitting ? null : _submit,
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF0061a4),
-              foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(vertical: 16),
             ),
             child: _submitting

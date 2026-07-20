@@ -75,15 +75,14 @@ class ExecutionService {
     String? photoUrl,
   }) async {
     final localId = 'local_${DateTime.now().millisecondsSinceEpoch}';
-    final persistentPhotoUrl = await FileHelper.persistFile(photoUrl);
-    final resolvedPhoto = _resolvePhotoUrl(persistentPhotoUrl);
+    final persistentPhotoPath = await FileHelper.persistFile(photoUrl);
     final payload = {
       'updates': [
         {
           'local_id': localId,
           'update_time': updateTime.toUtc().toIso8601String(),
           'notes': notes,
-          if (resolvedPhoto != null) 'photo_url': resolvedPhoto,
+          if (persistentPhotoPath != null) 'photo_url': persistentPhotoPath,
         },
       ],
     };
@@ -93,13 +92,16 @@ class ExecutionService {
       localId: localId,
       notes: notes,
       updateTime: updateTime.toUtc().toIso8601String(),
-      photoUrl: resolvedPhoto,
+      photoUrl: persistentPhotoPath,
     );
 
     await DatabaseHelper.instance.queueMutation(
       endpoint: '/execution/jobs/$jobId/updates/sync',
       method: 'POST',
       payload: jsonEncode(payload),
+      hasFile: persistentPhotoPath != null,
+      localFilePath: persistentPhotoPath,
+      fileFieldKey: persistentPhotoPath != null ? 'updates.0.photo_url' : null,
     );
     await _sync.triggerManualSync();
   }
@@ -115,9 +117,9 @@ class ExecutionService {
     required String status,
     String? clientFeedback,
   }) async {
-    final persistentUrl = await FileHelper.persistFile(clientSignoffUrl);
+    final persistentPath =
+        await FileHelper.persistFile(clientSignoffUrl) ?? clientSignoffUrl;
     final payload = {
-      'client_signoff_url': persistentUrl ?? clientSignoffUrl,
       'status': status,
       if (clientFeedback != null && clientFeedback.isNotEmpty)
         'client_feedback': clientFeedback,
@@ -127,6 +129,9 @@ class ExecutionService {
       endpoint: '/execution/jobs/$jobId/signoff',
       method: 'PATCH',
       payload: jsonEncode(payload),
+      hasFile: true,
+      localFilePath: persistentPath,
+      fileFieldKey: 'client_signoff_url',
     );
     await _sync.triggerManualSync();
   }
@@ -157,18 +162,18 @@ class ExecutionService {
   }
 
   Future<void> contractorCheckIn(int jobId, {String? verificationNotes, String? proofPhotoUrl}) async {
-    final persistentPhotoUrl = await FileHelper.persistFile(proofPhotoUrl);
-    await _api.contractorCheckIn(jobId, verificationNotes: verificationNotes, proofPhotoUrl: persistentPhotoUrl ?? proofPhotoUrl);
+    String? mockUrl;
+    if (proofPhotoUrl != null && proofPhotoUrl.isNotEmpty) {
+      final persistentPath = await FileHelper.persistFile(proofPhotoUrl) ?? proofPhotoUrl;
+      // TODO: replace with a real upload once a generic backend upload
+      // endpoint exists (see issue/01-backend-issues.md).
+      mockUrl = MockUploadService.toMockUrl(persistentPath, bucket: 'contractor-checkins');
+    }
+    await _api.contractorCheckIn(jobId, verificationNotes: verificationNotes, proofPhotoUrl: mockUrl);
   }
 
   Future<void> contractorCheckOut(int jobId) async {
     await _api.contractorCheckOut(jobId);
-  }
-
-  String? _resolvePhotoUrl(String? photoUrl) {
-    if (photoUrl == null || photoUrl.isEmpty) return null;
-    if (MockUploadService.isHttpUrl(photoUrl)) return photoUrl;
-    return MockUploadService.toMockUrl(photoUrl, bucket: 'site-updates');
   }
 
   Future<void> _refreshInstallersCache() async {

@@ -1,6 +1,7 @@
 // ignore_for_file: use_build_context_synchronously
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/ui_feedback.dart';
 import '../../../shared/widgets/dialog_fields.dart';
 import '../services/logistics_service.dart';
@@ -64,9 +65,6 @@ class _DispatchRecordingScreenState extends ConsumerState<DispatchRecordingScree
     return Scaffold(
       appBar: AppBar(
         title: const Text('Record Dispatch'),
-        backgroundColor: const Color(0xFF0061a4),
-        foregroundColor: Colors.white,
-        elevation: 0,
       ),
       body: SingleChildScrollView(
         child: Padding(
@@ -79,9 +77,9 @@ class _DispatchRecordingScreenState extends ConsumerState<DispatchRecordingScree
                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 8),
-              const Text(
+              Text(
                 'Log dispatch or delivery updates for an existing dispatch.',
-                style: TextStyle(color: Color(0xFF707883)),
+                style: TextStyle(color: AppColors.onSurfaceVariant),
               ),
               const SizedBox(height: 16),
               DialogTextField(
@@ -126,8 +124,6 @@ class _DispatchRecordingScreenState extends ConsumerState<DispatchRecordingScree
     return ElevatedButton(
       onPressed: isSubmitting ? null : () => _submitDispatchRecord(eventType),
       style: ElevatedButton.styleFrom(
-        backgroundColor: const Color(0xFF0061a4),
-        foregroundColor: Colors.white,
         padding: const EdgeInsets.symmetric(vertical: 16),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       ),

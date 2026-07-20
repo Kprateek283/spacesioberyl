@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../core/network/mock_upload_service.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/network/sync_service.dart';
 import '../../../core/local_db/database_helper.dart';
@@ -148,12 +147,10 @@ class HrService {
       'expense_date': expenseDate,
     };
 
+    String? persistentReceiptPath;
     if (receiptImagePath != null) {
-      final persistentPath = await FileHelper.persistFile(receiptImagePath);
-      payloadMap['receipt_url'] = MockUploadService.toMockUrl(
-        persistentPath ?? receiptImagePath,
-        bucket: 'receipts',
-      );
+      persistentReceiptPath =
+          await FileHelper.persistFile(receiptImagePath) ?? receiptImagePath;
     }
 
     final payload = jsonEncode(payloadMap);
@@ -162,7 +159,9 @@ class HrService {
       endpoint: '/hr/expenses',
       method: 'POST',
       payload: payload,
-      hasFile: false,
+      hasFile: persistentReceiptPath != null,
+      localFilePath: persistentReceiptPath,
+      fileFieldKey: persistentReceiptPath != null ? 'receipt_url' : null,
     );
 
     await _syncService.triggerManualSync();

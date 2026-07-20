@@ -74,7 +74,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
         state = state.copyWith(
           isAuthenticated: true,
-          sessionUnlocked: roleValue != 'super_admin', // Only super_admin uses PINs
+          sessionUnlocked: false, // PIN verification is required for every role
           userRole: roleValue,
           isGhostMode: ghostMode,
           needsPinSetup: requiresPinSetup,
@@ -129,7 +129,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
         state = state.copyWith(
           isAuthenticated: true,
-          sessionUnlocked: roleName != 'super_admin', // Only super_admin uses PINs
+          sessionUnlocked: false, // PIN verification is required for every role
           userRole: roleName,
           needsPinSetup: requiresPinSetup,
           isLoading: false,

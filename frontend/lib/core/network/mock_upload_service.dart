@@ -1,7 +1,8 @@
 import 'package:path/path.dart' as p;
 
 /// Temporary frontend-only helper for environments where backend file upload
-/// routes are not available yet.
+/// routes are not available yet. A generic `POST /api/v1/uploads` endpoint is
+/// needed to replace this — see issue/01-backend-issues.md.
 class MockUploadService {
   static String toMockUrl(String localPath, {String bucket = 'mock-uploads'}) {
     final fileName = p.basename(localPath).replaceAll(' ', '_');

@@ -1,6 +1,7 @@
 // ignore_for_file: use_build_context_synchronously
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/ui_feedback.dart';
 import '../../../shared/widgets/dialog_action_buttons.dart';
 import '../../../shared/widgets/dialog_fields.dart';
@@ -83,8 +84,6 @@ class ProfileScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Profile'),
-        backgroundColor: const Color(0xFF0061a4),
-        foregroundColor: Colors.white,
         actions: [
           IconButton(
             icon: const Icon(Icons.logout),
@@ -104,17 +103,17 @@ class ProfileScreen extends ConsumerWidget {
             children: [
               CircleAvatar(
                 radius: 40,
-                backgroundColor: const Color(0xFF0061a4),
+                backgroundColor: AppColors.primaryContainer,
                 child: Text(
                   name.isNotEmpty ? name[0].toUpperCase() : '?',
-                  style: const TextStyle(fontSize: 32, color: Colors.white),
+                  style: const TextStyle(fontSize: 32, color: AppColors.onPrimaryContainer),
                 ),
               ),
               const SizedBox(height: 16),
               Text(name,
                   style: const TextStyle(
                       fontSize: 22, fontWeight: FontWeight.bold)),
-              Text(email, style: const TextStyle(color: Colors.grey)),
+              Text(email, style: TextStyle(color: AppColors.onSurfaceVariant)),
               const SizedBox(height: 24),
               _infoTile('Role', role),
               _infoTile('Department', dept),
@@ -140,7 +139,7 @@ class ProfileScreen extends ConsumerWidget {
   Widget _infoTile(String label, String value) {
     return ListTile(
       contentPadding: EdgeInsets.zero,
-      title: Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+      title: Text(label, style: TextStyle(fontSize: 12, color: AppColors.onSurfaceVariant)),
       subtitle: Text(value, style: const TextStyle(fontSize: 16)),
     );
   }
