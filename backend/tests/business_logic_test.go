@@ -6,13 +6,48 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"sync"
 	"testing"
 )
 
+// Fixture constants from backend/db/seeds/dev_seed.sql. Only the super_admin
+// has PINs, because IAMService.SetupPins refuses to store them for other roles.
+const (
+	seedSuperEmail    = "super@spacesio.test"
+	seedPassword      = "Password123!"
+	seedNormalPIN     = "1234"   // ghost_mode = false, cash hidden
+	seedGhostPIN      = "654321" // ghost_mode = true, cash visible
+	seedCashLeadID    = "2"      // "Kalyani Residency" — its only approved quote is cash
+)
+
+// Tokens are cached for the whole run. /login and /iam/verify-pin are rate
+// limited to 5 requests per minute per IP, so a suite that authenticates per
+// test trips its own limiter and fails with "No token in response".
+var (
+	tokenMu    sync.Mutex
+	tokenCache = map[string]string{}
+)
+
+func cachedToken(t *testing.T, key string, mint func() string) string {
+	t.Helper()
+	tokenMu.Lock()
+	defer tokenMu.Unlock()
+	if tok, ok := tokenCache[key]; ok {
+		return tok
+	}
+	tok := mint()
+	tokenCache[key] = tok
+	return tok
+}
+
 func getBaseToken(t *testing.T) string {
+	return cachedToken(t, "base", func() string { return loginForToken(t) })
+}
+
+func loginForToken(t *testing.T) string {
 	payload := map[string]string{
-		"email":    "admin@company.com",
-		"password": "newpass123",
+		"email":    seedSuperEmail,
+		"password": seedPassword,
 	}
 	body, _ := json.Marshal(payload)
 	req, _ := http.NewRequest("POST", "http://localhost:8080/api/v1/login", bytes.NewBuffer(body))
@@ -35,6 +70,10 @@ func getBaseToken(t *testing.T) string {
 }
 
 func getPINToken(t *testing.T, baseToken, pin string) string {
+	return cachedToken(t, "pin:"+pin, func() string { return verifyPINForToken(t, baseToken, pin) })
+}
+
+func verifyPINForToken(t *testing.T, baseToken, pin string) string {
 	payload := map[string]string{"pin": pin}
 	body, _ := json.Marshal(payload)
 	req, _ := http.NewRequest("POST", "http://localhost:8080/api/v1/iam/verify-pin", bytes.NewBuffer(body))
@@ -60,14 +99,13 @@ func getPINToken(t *testing.T, baseToken, pin string) string {
 func TestGhostModeLogic(t *testing.T) {
 	baseToken := getBaseToken(t)
 
-	// In the seeded system, normal PIN is 1234, Ghost PIN is 567890
-	normalToken := getPINToken(t, baseToken, "1234")
-	ghostToken := getPINToken(t, baseToken, "567890")
+	normalToken := getPINToken(t, baseToken, seedNormalPIN)
+	ghostToken := getPINToken(t, baseToken, seedGhostPIN)
 
 	client := &http.Client{}
 
 	// Test 1: Normal PIN should NOT see cash transactions
-	req1, _ := http.NewRequest("GET", "http://localhost:8080/api/v1/crm/leads/1/quotations", nil)
+	req1, _ := http.NewRequest("GET", "http://localhost:8080/api/v1/crm/leads/"+seedCashLeadID+"/quotations", nil)
 	req1.Header.Set("Authorization", "Bearer "+normalToken)
 	resp1, err := client.Do(req1)
 	if err != nil {
@@ -81,7 +119,7 @@ func TestGhostModeLogic(t *testing.T) {
 	}
 
 	// Test 2: Ghost PIN SHOULD see cash transactions
-	req2, _ := http.NewRequest("GET", "http://localhost:8080/api/v1/crm/leads/1/quotations", nil)
+	req2, _ := http.NewRequest("GET", "http://localhost:8080/api/v1/crm/leads/"+seedCashLeadID+"/quotations", nil)
 	req2.Header.Set("Authorization", "Bearer "+ghostToken)
 	resp2, err := client.Do(req2)
 	if err != nil {
@@ -96,7 +134,7 @@ func TestGhostModeLogic(t *testing.T) {
 }
 
 func TestHRLeaveStateLogic(t *testing.T) {
-	token := getPINToken(t, getBaseToken(t), "1234")
+	token := getPINToken(t, getBaseToken(t), seedNormalPIN)
 	client := &http.Client{}
 
 	// 1. Create a Leave

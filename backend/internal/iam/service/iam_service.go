@@ -5,7 +5,9 @@ import (
 	"crypto/rand"
 	"errors"
 	"fmt"
+	"math/big"
 	"regexp"
+	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -13,6 +15,22 @@ import (
 	"github.com/spacesioberyl/system-v1/internal/iam/dto"
 	"github.com/spacesioberyl/system-v1/internal/iam/model"
 )
+
+// Per-account brute-force protection (backend-bugs #4). This is the second
+// layer above the per-IP httprate limiter; it protects a single account from a
+// distributed attempt that rotates source IPs — critical for the 4/6-digit PINs.
+const (
+	maxLoginAttempts = 5
+	loginLockWindow  = 15 * time.Minute
+	maxPinAttempts   = 5
+	pinLockWindow    = 15 * time.Minute
+	maxOTPAttempts   = 5
+)
+
+// dummyHash is a valid bcrypt hash compared against on the user-not-found login
+// path so both branches pay the same bcrypt cost, closing the timing side
+// channel (backend-bugs #24). Its plaintext is irrelevant — it never matches.
+const dummyHash = "$2a$10$LUbTYMGgUj7BnN7Y9uCil.OtJ94YVyDzMqF3ZcZyijc2x50seGIcm"
 
 // UserRepository defines the exact database functions this service requires
 type UserRepository interface {
@@ -24,25 +42,69 @@ type UserRepository interface {
 	ListUsers(ctx context.Context) ([]*model.User, error)
 	UpdatePassword(ctx context.Context, userID int, newHash string) error
 	SetupPins(ctx context.Context, userID int, pinHash, highSecPinHash string) error
+
+	// Refresh-token lifecycle (backend-bugs #7/#8)
+	InsertRefreshToken(ctx context.Context, userID int, jti string, ghostMode bool, expiresAt time.Time) error
+	GetRefreshTokenByJTI(ctx context.Context, jti string) (*model.RefreshToken, error)
+	RevokeRefreshToken(ctx context.Context, jti string) error
+	RevokeAllUserRefreshTokens(ctx context.Context, userID int) error
 }
 
 type IAMService struct {
 	repo      UserRepository
 	jwtSecret string
+	appEnv    string
 }
 
-func NewIAMService(repo UserRepository, secret string) *IAMService {
+func NewIAMService(repo UserRepository, secret, appEnv string) *IAMService {
 	return &IAMService{
 		repo:      repo,
 		jwtSecret: secret,
+		appEnv:    appEnv,
 	}
+}
+
+// isLockedOut reports whether the failure counter at key has reached max. It
+// fails open on a Redis error: the per-IP httprate limiter remains as a floor,
+// and locking every account out because the cache blipped is the worse outcome.
+func (s *IAMService) isLockedOut(ctx context.Context, key string, max int64) bool {
+	n, err := cache.Client.Get(ctx, key).Int64()
+	if err != nil {
+		return false
+	}
+	return n >= max
+}
+
+// recordFailure increments the failure counter at key, (re)setting its window on
+// the first failure.
+func (s *IAMService) recordFailure(ctx context.Context, key string, window time.Duration) {
+	n, err := cache.Client.Incr(ctx, key).Result()
+	if err == nil && n == 1 {
+		_ = cache.Client.Expire(ctx, key, window).Err()
+	}
+}
+
+// clearFailures drops the counter after a success.
+func (s *IAMService) clearFailures(ctx context.Context, key string) {
+	_ = cache.Client.Del(ctx, key).Err()
 }
 
 // Login handles the core authentication flow
 func (s *IAMService) Login(ctx context.Context, req dto.LoginRequest) (*dto.AuthResponse, error) {
+	// 0. Per-account lockout: block a targeted account once it has accumulated
+	// too many recent failures, regardless of source IP (backend-bugs #4).
+	failKey := "login_fail:" + strings.ToLower(req.Email)
+	if s.isLockedOut(ctx, failKey, maxLoginAttempts) {
+		return nil, errors.New("too many failed attempts, please try again later")
+	}
+
 	// 1. Fetch user by email
 	user, err := s.repo.GetUserByEmail(ctx, req.Email)
 	if err != nil {
+		// Equalize timing with the found-user path so a missing email cannot be
+		// distinguished by response time (backend-bugs #24).
+		_ = CheckPasswordHash(req.Password, dummyHash)
+		s.recordFailure(ctx, failKey, loginLockWindow)
 		return nil, errors.New("invalid credentials")
 	}
 
@@ -53,13 +115,19 @@ func (s *IAMService) Login(ctx context.Context, req dto.LoginRequest) (*dto.Auth
 
 	// 3. Compare passwords
 	if !CheckPasswordHash(req.Password, user.PasswordHash) {
+		s.recordFailure(ctx, failKey, loginLockWindow)
 		return nil, errors.New("invalid credentials")
 	}
+	s.clearFailures(ctx, failKey)
 
-	// 4. Generate Tokens
-	accessToken, refreshToken, err := GenerateTokens(user, s.jwtSecret)
+	// 4. Generate Tokens and persist the refresh token server-side so it can be
+	// rotated and revoked (backend-bugs #7/#8).
+	accessToken, refreshToken, refreshJTI, err := GenerateTokens(user, s.jwtSecret)
 	if err != nil {
 		return nil, errors.New("failed to generate tokens")
+	}
+	if err := s.repo.InsertRefreshToken(ctx, user.ID, refreshJTI, false, time.Now().Add(RefreshTokenTTL)); err != nil {
+		return nil, errors.New("failed to persist session")
 	}
 
 	// 5. Ghost Mode detection: If Super Admin and PINs are not set up yet, flag it
@@ -147,12 +215,20 @@ func (s *IAMService) VerifyPin(ctx context.Context, userID int, pin string) (*dt
 		return nil, errors.New("PINs have not been set up. Please call setup-pins first")
 	}
 
+	// Per-account PIN lockout. The high-security PIN mints ghost-mode tokens, so
+	// the 4/6-digit space must not be brute-forceable (backend-bugs #4).
+	failKey := fmt.Sprintf("pin_fail:%d", userID)
+	if s.isLockedOut(ctx, failKey, maxPinAttempts) {
+		return nil, errors.New("too many failed attempts, please try again later")
+	}
+
 	// Fork 1: Check Standard PIN → ghost_mode=false
 	if CheckPasswordHash(pin, *user.PinHash) {
-		accessToken, _, err := GenerateTokens(user, s.jwtSecret)
+		accessToken, _, _, err := GenerateTokens(user, s.jwtSecret)
 		if err != nil {
 			return nil, errors.New("failed to generate token")
 		}
+		s.clearFailures(ctx, failKey)
 		return &dto.PinAuthResponse{
 			AccessToken: accessToken,
 			GhostMode:   false,
@@ -161,10 +237,11 @@ func (s *IAMService) VerifyPin(ctx context.Context, userID int, pin string) (*dt
 
 	// Fork 2: Check High-Security PIN → ghost_mode=true
 	if user.HighSecurityPinHash != nil && CheckPasswordHash(pin, *user.HighSecurityPinHash) {
-		accessToken, _, err := GenerateGhostModeTokens(user, s.jwtSecret)
+		accessToken, _, _, err := GenerateGhostModeTokens(user, s.jwtSecret)
 		if err != nil {
 			return nil, errors.New("failed to generate token")
 		}
+		s.clearFailures(ctx, failKey)
 		return &dto.PinAuthResponse{
 			AccessToken: accessToken,
 			GhostMode:   true,
@@ -172,6 +249,7 @@ func (s *IAMService) VerifyPin(ctx context.Context, userID int, pin string) (*dt
 	}
 
 	// Fork 3: Neither PIN matched
+	s.recordFailure(ctx, failKey, pinLockWindow)
 	return nil, errors.New("invalid PIN")
 }
 
@@ -242,9 +320,11 @@ func (s *IAMService) ListUsers(ctx context.Context) ([]*dto.UserResponse, error)
 	return response, nil
 }
 
-// RefreshToken validates a 30-day token and mints fresh ones
+// RefreshToken validates a 30-day token against its server-side record, rotates
+// it, and mints a fresh pair. Presenting a token whose row is already revoked is
+// treated as theft: the whole family is revoked (backend-bugs #7/#8).
 func (s *IAMService) RefreshToken(ctx context.Context, refreshToken string) (*dto.AuthResponse, error) {
-	// 1. Parse and validate the JWT
+	// 1. Parse and validate the JWT signature/expiry
 	claims := &TokenClaims{}
 	token, err := jwt.ParseWithClaims(refreshToken, claims, func(token *jwt.Token) (interface{}, error) {
 		return []byte(s.jwtSecret), nil
@@ -254,27 +334,50 @@ func (s *IAMService) RefreshToken(ctx context.Context, refreshToken string) (*dt
 		return nil, errors.New("invalid or expired refresh token")
 	}
 
-	// 2. Fetch the user directly from the Repo using the ID inside the token
-	// This ensures we embed their most up-to-date role and department in the new token
-	user, err := s.repo.GetUserByID(ctx, claims.UserID)
+	// 2. Look the token up server-side. No jti (a pre-migration token) or no row
+	// (unknown/pruned) means it cannot be trusted for rotation.
+	if claims.ID == "" {
+		return nil, errors.New("invalid or expired refresh token")
+	}
+	stored, err := s.repo.GetRefreshTokenByJTI(ctx, claims.ID)
+	if err != nil {
+		return nil, errors.New("invalid or expired refresh token")
+	}
+
+	// 3. Reuse detection: a revoked row presented again means this token was
+	// already rotated or logged out. Assume theft and revoke every session.
+	if stored.RevokedAt != nil {
+		_ = s.repo.RevokeAllUserRefreshTokens(ctx, stored.UserID)
+		return nil, errors.New("refresh token reuse detected; all sessions have been revoked, please log in again")
+	}
+
+	// 4. Fetch the user to embed their most up-to-date role/department, and to
+	// confirm they were not deactivated while offline.
+	user, err := s.repo.GetUserByID(ctx, stored.UserID)
 	if err != nil {
 		return nil, errors.New("user no longer exists")
 	}
-
-	// 3. Security check: Were they deactivated while offline?
 	if !user.IsActive {
 		return nil, errors.New("account is deactivated")
 	}
 
-	// 4. Generate new tokens (preserve ghost mode state from the original refresh token)
-	var newAccessToken, newRefreshToken string
-	if claims.GhostMode {
-		newAccessToken, newRefreshToken, err = GenerateGhostModeTokens(user, s.jwtSecret)
+	// 5. Rotate: mint a new pair (ghost mode is taken from the stored row, the
+	// canonical record), revoke the presented token, and persist the new one.
+	var newAccessToken, newRefreshToken, newJTI string
+	if stored.GhostMode {
+		newAccessToken, newRefreshToken, newJTI, err = GenerateGhostModeTokens(user, s.jwtSecret)
 	} else {
-		newAccessToken, newRefreshToken, err = GenerateTokens(user, s.jwtSecret)
+		newAccessToken, newRefreshToken, newJTI, err = GenerateTokens(user, s.jwtSecret)
 	}
 	if err != nil {
 		return nil, errors.New("failed to generate new tokens")
+	}
+
+	if err := s.repo.RevokeRefreshToken(ctx, stored.JTI); err != nil {
+		return nil, errors.New("failed to rotate session")
+	}
+	if err := s.repo.InsertRefreshToken(ctx, user.ID, newJTI, stored.GhostMode, time.Now().Add(RefreshTokenTTL)); err != nil {
+		return nil, errors.New("failed to persist session")
 	}
 
 	return &dto.AuthResponse{
@@ -284,11 +387,15 @@ func (s *IAMService) RefreshToken(ctx context.Context, refreshToken string) (*dt
 	}, nil
 }
 
-// Logout adds the active JWT to the Redis blacklist
-func (s *IAMService) Logout(ctx context.Context, tokenString string) error {
-	// We set a TTL of 1 hour on the Redis key because that is the maximum lifespan
-	// of an access token. Once it expires naturally, we don't need to track it anymore.
-	return cache.Client.Set(ctx, "blacklist:"+tokenString, "true", time.Hour).Err()
+// Logout blacklists the active access token and revokes every refresh token for
+// the user, so the session cannot be resurrected via /refresh (backend-bugs #7).
+func (s *IAMService) Logout(ctx context.Context, tokenString string, userID int) error {
+	// The access token blacklist TTL matches its maximum lifespan; once it
+	// expires naturally there is nothing left to track.
+	if err := cache.Client.Set(ctx, "blacklist:"+tokenString, "true", AccessTokenTTL).Err(); err != nil {
+		return err
+	}
+	return s.repo.RevokeAllUserRefreshTokens(ctx, userID)
 }
 
 // ChangePassword verifies the old password before hashing and saving the new one
@@ -318,22 +425,32 @@ func (s *IAMService) ForgotPassword(ctx context.Context, email string) error {
 		return err // Remember: Handler suppresses this error for security
 	}
 
-	// Generate a secure 6-digit OTP
-	b := make([]byte, 3)
-	_, _ = rand.Read(b)
-	otp := fmt.Sprintf("%06d", (int(b[0])<<16|int(b[1])<<8|int(b[2])) % 1000000)
+	// Generate a uniformly-random 6-digit OTP. crypto/rand.Int over the exact
+	// range avoids the modulo bias the old reduction introduced (backend-bugs #23).
+	n, err := rand.Int(rand.Reader, big.NewInt(1000000))
+	if err != nil {
+		return errors.New("failed to process password reset")
+	}
+	otp := fmt.Sprintf("%06d", n.Int64())
 
-	// Store OTP in Redis with a 15-minute expiration
+	// Store OTP in Redis with a 15-minute expiration, and reset the attempt
+	// counter for this address (backend-bugs #21).
 	redisKey := "pwd_reset:" + user.Email
 	if err := cache.Client.Set(ctx, redisKey, otp, 15*time.Minute).Err(); err != nil {
 		return errors.New("failed to process password reset")
 	}
+	_ = cache.Client.Del(ctx, "pwd_reset_fail:"+user.Email).Err()
 
 	// In a production environment, you would trigger an email or SMS service here:
 	// emailService.SendOTP(user.Email, otp)
 
-	// For local development, we print it to the Docker logs so you can test the reset route
-	fmt.Printf("🔒 OTP Generated for %s: %s\n", user.Email, otp)
+	// Outside production we print the OTP to the logs so the reset route is
+	// testable. In production this would leak reset codes to anyone with log
+	// access, so it is gated (backend-bugs #22). The real sender is the actual
+	// blocker for a usable production reset flow.
+	if !strings.EqualFold(s.appEnv, "production") {
+		fmt.Printf("🔒 OTP Generated for %s: %s\n", user.Email, otp)
+	}
 
 	return nil
 }
@@ -341,6 +458,14 @@ func (s *IAMService) ForgotPassword(ctx context.Context, email string) error {
 // ResetPassword validates the OTP from Redis and forces the password change
 func (s *IAMService) ResetPassword(ctx context.Context, email, otp, newPassword string) error {
 	redisKey := "pwd_reset:" + email
+	failKey := "pwd_reset_fail:" + email
+
+	// A 6-digit OTP with unlimited guesses inside its 15-minute window is
+	// brute-forceable; invalidate it after a few wrong attempts (backend-bugs #21).
+	if s.isLockedOut(ctx, failKey, maxOTPAttempts) {
+		_ = cache.Client.Del(ctx, redisKey).Err()
+		return errors.New("too many invalid attempts; request a new OTP")
+	}
 
 	// Fetch the saved OTP from Redis
 	savedOTP, err := cache.Client.Get(ctx, redisKey).Result()
@@ -349,6 +474,7 @@ func (s *IAMService) ResetPassword(ctx context.Context, email, otp, newPassword 
 	}
 
 	if savedOTP != otp {
+		s.recordFailure(ctx, failKey, 15*time.Minute)
 		return errors.New("invalid OTP")
 	}
 
@@ -367,8 +493,9 @@ func (s *IAMService) ResetPassword(ctx context.Context, email, otp, newPassword 
 		return errors.New("failed to update password")
 	}
 
-	// Delete the OTP from Redis so it cannot be reused
+	// Delete the OTP and its attempt counter so neither can be reused
 	_ = cache.Client.Del(ctx, redisKey)
+	_ = cache.Client.Del(ctx, failKey)
 
 	return nil
 }

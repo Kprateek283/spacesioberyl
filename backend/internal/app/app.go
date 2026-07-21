@@ -102,7 +102,7 @@ func (a *Application) registerSystemRoutes() {
 
 func (a *Application) registerIAM() {
 	repo := iamRepo.NewIAMRepository(a.DB)
-	svc := iamService.NewIAMService(repo, a.Config.JWTSecret)
+	svc := iamService.NewIAMService(repo, a.Config.JWTSecret, a.Config.AppEnv)
 	handler := iamHandler.NewIAMHandler(svc)
 	iam.RegisterRoutes(a.Router, a.requireAuth, handler)
 	logger.Log.Info("Module 1 (IAM + Ghost Mode) registered")
@@ -122,6 +122,12 @@ func (a *Application) registerHR() {
 	leaveHandler := hrHandler.NewLeaveHandler(leaveSvc)
 
 	hr.RegisterRoutes(a.Router, a.requireAuth, attHandler, expHandler, leaveHandler)
+
+	// The attendance geofence is silently disabled when OFFICE_IP accepts every
+	// address; make that loud rather than a silent security hole (backend-bugs #11).
+	if a.Config.OfficeIP == "" || a.Config.OfficeIP == "0.0.0.0" {
+		logger.Log.Warn("Attendance geofence DISABLED: OFFICE_IP accepts all addresses", "office_ip", a.Config.OfficeIP)
+	}
 	logger.Log.Info("Module 2 (HR + Leave Management) registered")
 }
 

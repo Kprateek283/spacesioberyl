@@ -18,6 +18,10 @@ type Config struct {
 	RabbitMQURL string
 	JWTSecret   string
 
+	// AppEnv gates development-only behaviour (e.g. printing password-reset OTPs
+	// to stdout). Anything other than "production" is treated as non-production.
+	AppEnv string
+
 	// Office Network IP (for attendance WiFi check)
 	OfficeIP string
 
@@ -44,6 +48,8 @@ func Load() *Config {
 		RedisURL:    getEnv("REDIS_URL", "redis://system_cache:6379/0"),
 		RabbitMQURL: getEnv("RABBITMQ_URL", "amqp://guest:guest@system_mq:5672/"),
 		JWTSecret:   getEnv("JWT_SECRET", ""),
+
+		AppEnv: getEnv("APP_ENV", "development"),
 
 		OfficeIP: getEnv("OFFICE_IP", "0.0.0.0"), // 0.0.0.0 = dev mode (all IPs accepted)
 

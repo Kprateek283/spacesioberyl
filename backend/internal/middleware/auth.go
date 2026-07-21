@@ -3,6 +3,7 @@ package middleware
 import (
 	"context"
 	"encoding/json"
+	"net"
 	"net/http"
 	"strings"
 
@@ -55,8 +56,15 @@ func RequireAuth(secret string) func(http.Handler) http.Handler {
 				return
 			}
 
-			// Check if this specific token was explicitly logged out
-			isBlacklisted, _ := cache.Client.Exists(r.Context(), "blacklist:"+tokenString).Result()
+			// Check if this specific token was explicitly logged out. A revocation
+			// check must fail closed: if Redis is unreachable we cannot prove the
+			// token is still valid, so we reject rather than let a revoked token
+			// through (backend-bugs #6).
+			isBlacklisted, err := cache.Client.Exists(r.Context(), "blacklist:"+tokenString).Result()
+			if err != nil {
+				sendAuthError(w, http.StatusServiceUnavailable, "Authorization service temporarily unavailable")
+				return
+			}
 			if isBlacklisted > 0 {
 				sendAuthError(w, http.StatusUnauthorized, "Token has been revoked (Logged out)")
 				return
@@ -103,6 +111,28 @@ func RequireRole(allowedRoles ...string) func(http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 		})
 	}
+}
+
+// ClientIP returns the client's network address from the socket peer.
+// With no reverse proxy in front (the API is directly exposed), r.RemoteAddr is
+// the only trustworthy source — forwarded headers are attacker-controlled and
+// are deliberately ignored (backend-bugs #4/#11).
+func ClientIP(r *http.Request) string {
+	if host, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
+		return host
+	}
+	return r.RemoteAddr
+}
+
+// CanAssignRole reports whether a caller with callerRole may create a user with,
+// or promote a user to, targetRole. Only a super_admin may mint another
+// super_admin; anything below that any admin/super_admin may assign
+// (backend-bugs #10). This is the single place the hierarchy is written down.
+func CanAssignRole(callerRole, targetRole string) bool {
+	if targetRole == "super_admin" {
+		return callerRole == "super_admin"
+	}
+	return true
 }
 
 // GetGhostMode extracts the ghost_mode flag from the request context.

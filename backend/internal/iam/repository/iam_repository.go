@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -146,6 +147,44 @@ func (r *IAMRepository) UpdatePassword(ctx context.Context, userID int, newHash 
 	}
 
 	return nil
+}
+
+// InsertRefreshToken records a newly issued refresh token so it can later be
+// rotated or revoked (backend-bugs #7/#8).
+func (r *IAMRepository) InsertRefreshToken(ctx context.Context, userID int, jti string, ghostMode bool, expiresAt time.Time) error {
+	_, err := r.db.Exec(ctx,
+		`INSERT INTO refresh_tokens (user_id, jti, ghost_mode, expires_at) VALUES ($1, $2, $3, $4)`,
+		userID, jti, ghostMode, expiresAt)
+	return err
+}
+
+// GetRefreshTokenByJTI looks up a stored refresh token by its jti. A missing row
+// (unknown or pruned token) returns pgx.ErrNoRows.
+func (r *IAMRepository) GetRefreshTokenByJTI(ctx context.Context, jti string) (*model.RefreshToken, error) {
+	var t model.RefreshToken
+	err := r.db.QueryRow(ctx,
+		`SELECT id, user_id, jti, ghost_mode, expires_at, revoked_at, created_at
+		 FROM refresh_tokens WHERE jti = $1`, jti).Scan(
+		&t.ID, &t.UserID, &t.JTI, &t.GhostMode, &t.ExpiresAt, &t.RevokedAt, &t.CreatedAt)
+	if err != nil {
+		return nil, err
+	}
+	return &t, nil
+}
+
+// RevokeRefreshToken marks a single refresh token revoked (used on rotation).
+func (r *IAMRepository) RevokeRefreshToken(ctx context.Context, jti string) error {
+	_, err := r.db.Exec(ctx,
+		`UPDATE refresh_tokens SET revoked_at = CURRENT_TIMESTAMP WHERE jti = $1 AND revoked_at IS NULL`, jti)
+	return err
+}
+
+// RevokeAllUserRefreshTokens revokes every active refresh token for a user
+// (used on logout and on refresh-token reuse detection).
+func (r *IAMRepository) RevokeAllUserRefreshTokens(ctx context.Context, userID int) error {
+	_, err := r.db.Exec(ctx,
+		`UPDATE refresh_tokens SET revoked_at = CURRENT_TIMESTAMP WHERE user_id = $1 AND revoked_at IS NULL`, userID)
+	return err
 }
 
 // SetupPins stores both hashed PINs for the Super Admin (Ghost Mode initialization)
