@@ -37,10 +37,10 @@ type Quotation struct {
 	ID                 int             `json:"id" db:"id"`
 	LeadID             int             `json:"lead_id" db:"lead_id"`
 	CreatedBy          int             `json:"created_by" db:"created_by"`
-	Subtotal           float64         `json:"subtotal" db:"subtotal"`
-	TaxRate            float64         `json:"tax_rate" db:"tax_rate"`
-	TaxAmount          float64         `json:"tax_amount" db:"tax_amount"`
-	TotalAmount        float64         `json:"total_amount" db:"total_amount"`
+	Subtotal           int64           `json:"subtotal" db:"subtotal"`             // paise
+	TaxRate            float64         `json:"tax_rate" db:"tax_rate"`             // percentage, not money
+	TaxAmount          int64           `json:"tax_amount" db:"tax_amount"`         // paise
+	TotalAmount        int64           `json:"total_amount" db:"total_amount"`     // paise
 	PaymentTermType    string          `json:"payment_term_type" db:"payment_term_type"`
 	PaymentTermDetails json.RawMessage `json:"payment_term_details" db:"payment_term_details"`
 	Status             string          `json:"status" db:"status"`
@@ -57,7 +57,7 @@ type QuotationLineItem struct {
 	QuotationID int     `json:"quotation_id" db:"quotation_id"`
 	ItemName    string  `json:"item_name" db:"item_name"`
 	Description *string `json:"description" db:"description"`
-	Quantity    float64 `json:"quantity" db:"quantity"`
-	UnitPrice   float64 `json:"unit_price" db:"unit_price"`
-	TotalPrice  float64 `json:"total_price" db:"total_price"`
+	Quantity    float64 `json:"quantity" db:"quantity"`         // count, not money
+	UnitPrice   int64   `json:"unit_price" db:"unit_price"`     // paise
+	TotalPrice  int64   `json:"total_price" db:"total_price"`   // paise
 }

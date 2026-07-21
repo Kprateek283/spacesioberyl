@@ -59,21 +59,22 @@ SELECT setval('leads_id_seq', 5);
 -- Lead 4: draft quote, never approved  -> contributes no pipeline value
 -- =====================================================
 INSERT INTO quotations (id, lead_id, created_by, subtotal, tax_rate, tax_amount, total_amount, payment_term_type, payment_term_details, status) VALUES
-(1, 1, 3, 381355.93, 18.00,  68644.07, 450000.00, 'bank_transfer', '{"milestones":[{"label":"Advance","percent":40},{"label":"On delivery","percent":60}]}', 'approved'),
-(2, 2, 3, 233050.85, 18.00,  41949.15, 275000.00, 'cash',          '{"note":"Full settlement on handover"}',                                              'approved'),
-(3, 3, 3, 322033.90, 18.00,  57966.10, 380000.00, 'upi',           '{"milestones":[{"label":"Advance","percent":50},{"label":"On completion","percent":50}]}', 'approved'),
-(4, 4, 3,  84745.76, 18.00,  15254.24, 100000.00, 'bank_transfer', '{}',                                                                                  'draft'),
-(5, 5, 3, 169491.53, 18.00,  30508.47, 200000.00, 'cash',          '{"note":"Client declined"}',                                                          'rejected');
+-- Money columns are BIGINT paise (backend-bugs #15); tax_rate stays a percentage.
+(1, 1, 3, 38135593, 18.00,  6864407, 45000000, 'bank_transfer', '{"milestones":[{"label":"Advance","percent":40},{"label":"On delivery","percent":60}]}', 'approved'),
+(2, 2, 3, 23305085, 18.00,  4194915, 27500000, 'cash',          '{"note":"Full settlement on handover"}',                                              'approved'),
+(3, 3, 3, 32203390, 18.00,  5796610, 38000000, 'upi',           '{"milestones":[{"label":"Advance","percent":50},{"label":"On completion","percent":50}]}', 'approved'),
+(4, 4, 3,  8474576, 18.00,  1525424, 10000000, 'bank_transfer', '{}',                                                                                  'draft'),
+(5, 5, 3, 16949153, 18.00,  3050847, 20000000, 'cash',          '{"note":"Client declined"}',                                                          'rejected');
 SELECT setval('quotations_id_seq', 5);
 
 INSERT INTO quotation_line_items (quotation_id, item_name, description, quantity, unit_price, total_price) VALUES
-(1, 'Workstation cluster', '6-seat modular cluster, laminate finish', 8,  38000.00, 304000.00),
-(1, 'Task chairs',         'Mesh-back, adjustable lumbar',            24,  3223.16,  77355.93),
-(2, 'Modular wardrobe',    'Three-door, soft-close',                  5,  31000.00, 155000.00),
-(2, 'Kitchen cabinetry',   'Base and wall units, acrylic finish',     1,  78050.85,  78050.85),
-(3, 'Retail display bays', 'Backlit, powder-coated steel',            11, 24000.00, 264000.00),
-(3, 'Checkout counters',   'Laminate top, cable management',          2,  29016.95,  58033.90),
-(4, 'Reception desk',      'Curved, solid surface top',               1,  84745.76,  84745.76);
+(1, 'Workstation cluster', '6-seat modular cluster, laminate finish', 8,  3800000, 30400000),
+(1, 'Task chairs',         'Mesh-back, adjustable lumbar',            24,  322316,  7735593),
+(2, 'Modular wardrobe',    'Three-door, soft-close',                  5,  3100000, 15500000),
+(2, 'Kitchen cabinetry',   'Base and wall units, acrylic finish',     1,  7805085,  7805085),
+(3, 'Retail display bays', 'Backlit, powder-coated steel',            11, 2400000, 26400000),
+(3, 'Checkout counters',   'Laminate top, cable management',          2,  2901695,  5803390),
+(4, 'Reception desk',      'Curved, solid surface top',               1,  8474576,  8474576);
 
 -- =====================================================
 -- Orders — lead 2's order is CASH, and is the order-level filter discriminator
@@ -94,24 +95,24 @@ INSERT INTO vendors (id, company_name, contact_person, phone, email, tax_id, def
 SELECT setval('vendors_id_seq', 3);
 
 INSERT INTO purchase_orders (id, order_id, vendor_id, created_by, total_amount, status, payment_status, expected_delivery_date) VALUES
-(1, 1, 1, 4, 186000.00, 'received',  'paid',    CURRENT_DATE - 9),
-(2, 1, 2, 4,  42500.00, 'received',  'paid',    CURRENT_DATE - 7),
-(3, 3, 1, 4, 141000.00, 'received',  'paid',    CURRENT_DATE - 21),
-(4, 2, 3, 4,  61000.00, 'ordered',   'pending', CURRENT_DATE + 6);
+(1, 1, 1, 4, 18600000, 'received',  'paid',    CURRENT_DATE - 9),
+(2, 1, 2, 4,  4250000, 'received',  'paid',    CURRENT_DATE - 7),
+(3, 3, 1, 4, 14100000, 'received',  'paid',    CURRENT_DATE - 21),
+(4, 2, 3, 4,  6100000, 'ordered',   'pending', CURRENT_DATE + 6);
 SELECT setval('purchase_orders_id_seq', 4);
 
 -- =====================================================
 -- Installers and installations
 -- =====================================================
 INSERT INTO installers (id, name, phone, expertise_area, standard_rate, preferred_payment_mode, is_active) VALUES
-(1, 'Ganesh Fitting Works', '+91 99870 33001', 'modular_furniture', 2400.00, 'upi',  true),
-(2, 'Salim & Sons',         '+91 99870 33002', 'electrical',        2900.00, 'cash', true),
-(3, 'Precision Interiors',  '+91 99870 33003', 'glass_partition',   3300.00, 'bank_transfer', true);
+(1, 'Ganesh Fitting Works', '+91 99870 33001', 'modular_furniture', 240000, 'upi',  true),
+(2, 'Salim & Sons',         '+91 99870 33002', 'electrical',        290000, 'cash', true),
+(3, 'Precision Interiors',  '+91 99870 33003', 'glass_partition',   330000, 'bank_transfer', true);
 SELECT setval('installers_id_seq', 3);
 
 INSERT INTO installations (id, order_id, technical_manager_id, installer_id, agreed_installer_price, start_date, estimated_completion_date, status, installer_job_status, installer_advance_amount, installer_final_amount, client_signoff_url, client_feedback) VALUES
-(1, 1, 5, 1, 46000.00, CURRENT_DATE - 4, CURRENT_DATE + 2, 'in_progress', 'checked_in', 18000.00, NULL,      NULL, NULL),
-(2, 3, 5, 3, 58000.00, CURRENT_DATE - 24, CURRENT_DATE - 18, 'completed',  'completed',  22000.00, 36000.00, 'https://storage.local/crm-files/signoffs/3/signed.png', 'Clean finish, on schedule.');
+(1, 1, 5, 1, 4600000, CURRENT_DATE - 4, CURRENT_DATE + 2, 'in_progress', 'checked_in', 1800000, NULL,      NULL, NULL),
+(2, 3, 5, 3, 5800000, CURRENT_DATE - 24, CURRENT_DATE - 18, 'completed',  'completed',  2200000, 3600000, 'https://storage.local/crm-files/signoffs/3/signed.png', 'Clean finish, on schedule.');
 SELECT setval('installations_id_seq', 2);
 
 INSERT INTO installation_updates (installation_id, logged_by, update_time, notes, photo_url) VALUES
@@ -172,9 +173,9 @@ INSERT INTO hr_leaves (user_id, leave_type, start_date, end_date, reason, status
 (6, 'earned',  CURRENT_DATE + 20, CURRENT_DATE + 24, 'Annual holiday.',                     'pending',  NULL, NULL);
 
 INSERT INTO office_expenses (logged_by, amount, person_paid, context, expense_date, receipt_url) VALUES
-(4, 1850.00, 'Ravi Kadam',      'Site transport for Meridian delivery',      CURRENT_DATE - 5,  NULL),
-(6, 4300.00, 'Sundar Hardware', 'Replacement fittings, petty purchase',      CURRENT_DATE - 3,  'https://storage.local/crm-files/receipts/exp-2.jpg'),
-(4,  620.00, 'Local courier',   'Document dispatch to Nexus Retail',         CURRENT_DATE - 2,  NULL),
-(6, 12500.00,'Crestline Upholstery', 'Advance for chair rework',             CURRENT_DATE - 1,  'https://storage.local/crm-files/receipts/exp-4.jpg');
+(4, 185000, 'Ravi Kadam',      'Site transport for Meridian delivery',      CURRENT_DATE - 5,  NULL),
+(6, 430000, 'Sundar Hardware', 'Replacement fittings, petty purchase',      CURRENT_DATE - 3,  'https://storage.local/crm-files/receipts/exp-2.jpg'),
+(4,  62000, 'Local courier',   'Document dispatch to Nexus Retail',         CURRENT_DATE - 2,  NULL),
+(6, 1250000,'Crestline Upholstery', 'Advance for chair rework',             CURRENT_DATE - 1,  'https://storage.local/crm-files/receipts/exp-4.jpg');
 
 COMMIT;

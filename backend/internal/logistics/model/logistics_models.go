@@ -36,7 +36,7 @@ type PurchaseOrder struct {
 	OrderID              int       `json:"order_id" db:"order_id"`
 	VendorID             int       `json:"vendor_id" db:"vendor_id"`
 	CreatedBy            int       `json:"created_by" db:"created_by"`
-	TotalAmount          float64   `json:"total_amount" db:"total_amount"`
+	TotalAmount          int64     `json:"total_amount" db:"total_amount"` // paise
 	Status               string    `json:"status" db:"status"`
 	PaymentStatus        string    `json:"payment_status" db:"payment_status"`
 	ExpectedDeliveryDate *time.Time `json:"expected_delivery_date" db:"expected_delivery_date"`

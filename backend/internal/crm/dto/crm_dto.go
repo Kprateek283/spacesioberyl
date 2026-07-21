@@ -49,8 +49,8 @@ type CreateQuotationRequest struct {
 type LineItemInput struct {
 	ItemName    string  `json:"item_name" validate:"required"`
 	Description string  `json:"description"`
-	Quantity    float64 `json:"quantity" validate:"required"`
-	UnitPrice   float64 `json:"unit_price" validate:"required"`
+	Quantity    float64 `json:"quantity" validate:"required"`   // count, not money
+	UnitPrice   int64   `json:"unit_price" validate:"required"` // paise
 }
 
 type UpdateQuotationStatusRequest struct {

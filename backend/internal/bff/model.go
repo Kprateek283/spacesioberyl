@@ -14,7 +14,7 @@ type ProjectCard struct {
 	ID          int       `json:"id"`           // Master Lead ID
 	ClientName  string    `json:"client_name"`
 	Status      string    `json:"status"`       // The current unified stage
-	Value       float64   `json:"value"`        // Aggregated from approved quote (if any)
+	Value       int64     `json:"value"`        // paise; aggregated from approved quote (if any)
 	LastUpdated time.Time `json:"last_updated"`
 }
 
@@ -53,7 +53,7 @@ type ActionItem struct {
 	Type        string    `json:"type"`         // "QUOTE_APPROVAL", "LEAD_ASSIGNMENT"
 	Title       string    `json:"title"`
 	RequestedBy string    `json:"requested_by"` // User ID or Name
-	Amount      float64   `json:"amount"`       // For expenses/quotes. 0 for leaves.
+	Amount      int64     `json:"amount"`       // paise; for expenses/quotes. 0 for leaves.
 	CreatedAt   time.Time `json:"created_at"`
 }
 

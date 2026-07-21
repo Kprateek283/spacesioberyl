@@ -27,7 +27,7 @@ type AssignOrderManagerRequest struct {
 
 type CreatePurchaseOrderRequest struct {
 	VendorID             int     `json:"vendor_id" validate:"required"`
-	TotalAmount          float64 `json:"total_amount" validate:"required"`
+	TotalAmount          int64   `json:"total_amount" validate:"required"` // paise
 	ExpectedDeliveryDate string  `json:"expected_delivery_date"`
 }
 

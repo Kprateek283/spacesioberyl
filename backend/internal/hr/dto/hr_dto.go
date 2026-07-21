@@ -27,7 +27,7 @@ type AttendanceFilter struct {
 // ---------------------------------------------------------
 
 type CreateExpenseRequest struct {
-	Amount      float64 `json:"amount" validate:"required"`
+	Amount      int64   `json:"amount" validate:"required"` // paise
 	PersonPaid  string  `json:"person_paid" validate:"required"`
 	Context     string  `json:"context" validate:"required"`
 	ExpenseDate string  `json:"expense_date"` // YYYY-MM-DD, defaults to today

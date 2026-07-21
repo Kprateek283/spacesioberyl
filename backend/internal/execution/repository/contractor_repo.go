@@ -148,7 +148,7 @@ func (r *ContractorRepository) RecordPayment(ctx context.Context, payment *model
 }
 
 // GetLedger aggregates payments for a given installation and returns a financial summary
-func (r *ContractorRepository) GetLedger(ctx context.Context, jobID int) (agreedPrice float64, installerID int, totalAdvance, totalFinal float64, err error) {
+func (r *ContractorRepository) GetLedger(ctx context.Context, jobID int) (agreedPrice int64, installerID int, totalAdvance, totalFinal int64, err error) {
 	// Get agreed price and installer ID from the installation
 	instQuery := `SELECT COALESCE(agreed_installer_price, 0), COALESCE(installer_id, 0) FROM installations WHERE id = $1`
 	err = r.db.QueryRow(ctx, instQuery, jobID).Scan(&agreedPrice, &installerID)
@@ -161,9 +161,9 @@ func (r *ContractorRepository) GetLedger(ctx context.Context, jobID int) (agreed
 
 	// Get aggregated payment totals
 	payQuery := `
-		SELECT 
-			COALESCE(SUM(CASE WHEN payment_type = 'advance' THEN amount ELSE 0 END), 0),
-			COALESCE(SUM(CASE WHEN payment_type = 'final_discharge' THEN amount ELSE 0 END), 0)
+		SELECT
+			COALESCE(SUM(CASE WHEN payment_type = 'advance' THEN amount ELSE 0 END), 0)::BIGINT,
+			COALESCE(SUM(CASE WHEN payment_type = 'final_discharge' THEN amount ELSE 0 END), 0)::BIGINT
 		FROM installer_payments WHERE installation_id = $1
 	`
 	_ = r.db.QueryRow(ctx, payQuery, jobID).Scan(&totalAdvance, &totalFinal)
