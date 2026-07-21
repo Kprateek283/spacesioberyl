@@ -116,6 +116,32 @@ func (r *LogisticsRepository) ListOrders(ctx context.Context) ([]*model.Order, e
 	return orders, rows.Err()
 }
 
+// GetOrderByLeadID returns a lead's order, honouring the same ghost-mode cash
+// filter as ListOrders. Returns pgx.ErrNoRows when the lead has no visible
+// order. Centralising the filter here is the point of backend-bugs #32: callers
+// like the BFF must delegate rather than re-implement the query and drop the filter.
+func (r *LogisticsRepository) GetOrderByLeadID(ctx context.Context, leadID int) (*model.Order, error) {
+	query := `
+		SELECT o.id, o.quotation_id, o.lead_id, o.operations_manager_id, o.status, o.payment_term_type, o.created_at, o.updated_at, l.client_name
+		FROM orders o
+		JOIN leads l ON o.lead_id = l.id
+		WHERE o.lead_id = $1
+	`
+	if !middleware.GetGhostMode(ctx) {
+		query += " AND (o.payment_term_type IS NULL OR o.payment_term_type != 'cash')"
+	}
+	query += " ORDER BY o.created_at DESC LIMIT 1"
+
+	var o model.Order
+	err := r.db.QueryRow(ctx, query, leadID).Scan(
+		&o.ID, &o.QuotationID, &o.LeadID, &o.OperationsManagerID, &o.Status, &o.PaymentTermType, &o.CreatedAt, &o.UpdatedAt, &o.ClientName,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return &o, nil
+}
+
 func (r *LogisticsRepository) AssignOrderManager(ctx context.Context, orderID, managerID int) error {
 	query := `UPDATE orders SET operations_manager_id = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2`
 	tag, err := r.db.Exec(ctx, query, managerID, orderID)

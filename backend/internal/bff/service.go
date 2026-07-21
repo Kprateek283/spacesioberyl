@@ -15,8 +15,11 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	crmModels "github.com/spacesioberyl/system-v1/internal/crm/model"
+	crmRepo "github.com/spacesioberyl/system-v1/internal/crm/repository"
 	execModels "github.com/spacesioberyl/system-v1/internal/execution/model"
+	execRepo "github.com/spacesioberyl/system-v1/internal/execution/repository"
 	logModels "github.com/spacesioberyl/system-v1/internal/logistics/model"
+	logRepo "github.com/spacesioberyl/system-v1/internal/logistics/repository"
 	"github.com/spacesioberyl/system-v1/internal/middleware"
 	"github.com/spacesioberyl/system-v1/internal/storage"
 )
@@ -38,12 +41,19 @@ func cashFilter(ctx context.Context, column string) string {
 	return " AND " + column + " != 'cash'"
 }
 
+// BFFService aggregates across domains. For cash-bearing reads it delegates to
+// the owning repositories (which apply the ghost-mode filter) rather than
+// re-implementing their queries — the duplication that caused backend-bugs #32.
 type BFFService struct {
-	db *pgxpool.Pool
+	db     *pgxpool.Pool
+	leads  *crmRepo.LeadRepository
+	quotes *crmRepo.QuotationRepository
+	orders *logRepo.LogisticsRepository
+	exec   *execRepo.ExecutionRepository
 }
 
-func NewBFFService(db *pgxpool.Pool) *BFFService {
-	return &BFFService{db: db}
+func NewBFFService(db *pgxpool.Pool, leads *crmRepo.LeadRepository, quotes *crmRepo.QuotationRepository, orders *logRepo.LogisticsRepository, exec *execRepo.ExecutionRepository) *BFFService {
+	return &BFFService{db: db, leads: leads, quotes: quotes, orders: orders, exec: exec}
 }
 
 // GetPipeline returns the unified Kanban board state by aggregating CRM, Logistics, and Execution tables.
@@ -136,94 +146,84 @@ func (s *BFFService) GetProjectDetails(ctx context.Context, projectID int) (*Pro
 
 	g, gCtx := errgroup.WithContext(ctx)
 
-	// 1. Fetch Lead (CRM)
+	// 1. Fetch Lead (CRM) through the repository.
 	g.Go(func() error {
-		var l crmModels.Lead
-		query := `SELECT id, client_name, client_phone, client_email, source, assigned_to, status, lost_reason, created_at, updated_at FROM leads WHERE id = $1`
-		err := s.db.QueryRow(gCtx, query, projectID).Scan(
-			&l.ID, &l.ClientName, &l.ClientPhone, &l.ClientEmail, &l.Source, &l.AssignedTo, &l.Status, &l.LostReason, &l.CreatedAt, &l.UpdatedAt,
-		)
-		if err == nil {
-			resp.Lead = &l
-		} else if err != pgx.ErrNoRows {
+		lead, err := s.leads.GetByID(gCtx, projectID)
+		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return nil
+			}
 			return err
 		}
+		resp.Lead = lead
 		return nil
 	})
 
-	// 2. Fetch Quotations (CRM)
+	// 2. Fetch Quotations (CRM) through the repository, which owns the ghost-mode
+	// cash filter. The BFF must delegate rather than re-implement it and risk
+	// dropping the filter (backend-bugs #32).
 	g.Go(func() error {
-		query := `SELECT id, lead_id, created_by, subtotal, tax_rate, tax_amount, total_amount, payment_term_type, payment_term_details, status, pdf_url, is_custom_pdf, created_at, updated_at FROM quotations WHERE lead_id = $1` +
-			cashFilter(ctx, "payment_term_type")
-		rows, err := s.db.Query(gCtx, query, projectID)
+		quotes, err := s.quotes.ListByLead(gCtx, projectID)
 		if err != nil {
 			return err
 		}
-		defer rows.Close()
-		for rows.Next() {
-			var q crmModels.Quotation
-			if err := rows.Scan(&q.ID, &q.LeadID, &q.CreatedBy, &q.Subtotal, &q.TaxRate, &q.TaxAmount, &q.TotalAmount, &q.PaymentTermType, &q.PaymentTermDetails, &q.Status, &q.PdfURL, &q.IsCustomPdf, &q.CreatedAt, &q.UpdatedAt); err == nil {
-				resp.Quotes = append(resp.Quotes, q)
-			}
+		for _, q := range quotes {
+			resp.Quotes = append(resp.Quotes, *q)
 		}
 		return nil
 	})
 
-	// 3. Fetch Order (Logistics)
+	// 3. Fetch Order (Logistics) through the repository (ghost-mode aware), then
+	// its order-scoped children.
 	g.Go(func() error {
-		var o logModels.Order
-		query := `
-			SELECT o.id, o.quotation_id, o.lead_id, o.operations_manager_id, o.status, o.payment_term_type, l.client_name, o.created_at, o.updated_at
-			FROM orders o JOIN leads l ON l.id = o.lead_id WHERE o.lead_id = $1` +
-			cashFilter(ctx, "o.payment_term_type") + ` LIMIT 1`
-		err := s.db.QueryRow(gCtx, query, projectID).Scan(
-			&o.ID, &o.QuotationID, &o.LeadID, &o.OperationsManagerID, &o.Status, &o.PaymentTermType, &o.ClientName, &o.CreatedAt, &o.UpdatedAt,
+		order, err := s.orders.GetOrderByLeadID(gCtx, projectID)
+		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return nil
+			}
+			return err
+		}
+		resp.Order = order
+
+		// 3.1 POs (order-scoped). A failed query must fail the request, not
+		// silently report "no POs" — presenting incomplete financial data as
+		// complete is the worst outcome (backend-bugs #16).
+		poQuery := `SELECT id, order_id, vendor_id, created_by, total_amount, status, payment_status, expected_delivery_date, created_at FROM purchase_orders WHERE order_id = $1`
+		poRows, err := s.db.Query(gCtx, poQuery, order.ID)
+		if err != nil {
+			return err
+		}
+		defer poRows.Close()
+		for poRows.Next() {
+			var po logModels.PurchaseOrder
+			if err := poRows.Scan(&po.ID, &po.OrderID, &po.VendorID, &po.CreatedBy, &po.TotalAmount, &po.Status, &po.PaymentStatus, &po.ExpectedDeliveryDate, &po.CreatedAt); err == nil {
+				resp.POs = append(resp.POs, po)
+			}
+		}
+
+		// 3.2 Installation (order-scoped). advance/final amounts are non-nullable
+		// int64 in the model but the column is nullable (an unpaid installer has
+		// no final amount yet), so COALESCE NULL to 0 rather than fail the scan.
+		var i execModels.Installation
+		instQuery := `SELECT id, order_id, technical_manager_id, installer_id, agreed_installer_price, start_date, estimated_completion_date, status, installer_job_status, COALESCE(installer_advance_amount, 0), COALESCE(installer_final_amount, 0), client_signoff_url, client_feedback, created_at, updated_at FROM installations WHERE order_id = $1 LIMIT 1`
+		err = s.db.QueryRow(gCtx, instQuery, order.ID).Scan(
+			&i.ID, &i.OrderID, &i.TechnicalManagerID, &i.InstallerID, &i.AgreedInstallerPrice, &i.StartDate, &i.EstimatedCompletionDate, &i.Status, &i.InstallerJobStatus, &i.InstallerAdvanceAmount, &i.InstallerFinalAmount, &i.ClientSignoffURL, &i.ClientFeedback, &i.CreatedAt, &i.UpdatedAt,
 		)
-		if err == nil {
-			resp.Order = &o
-
-			// 3.1 Fetch POs inside this goroutine since we need Order ID.
-			// A failed query must fail the request, not silently report "no POs" —
-			// presenting incomplete financial data as complete is the worst
-			// outcome (backend-bugs #16).
-			poQuery := `SELECT id, order_id, vendor_id, created_by, total_amount, status, payment_status, expected_delivery_date, created_at FROM purchase_orders WHERE order_id = $1`
-			poRows, err := s.db.Query(gCtx, poQuery, o.ID)
-			if err != nil {
-				return err
+		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return nil
 			}
-			defer poRows.Close()
-			for poRows.Next() {
-				var po logModels.PurchaseOrder
-				if err := poRows.Scan(&po.ID, &po.OrderID, &po.VendorID, &po.CreatedBy, &po.TotalAmount, &po.Status, &po.PaymentStatus, &po.ExpectedDeliveryDate, &po.CreatedAt); err == nil {
-					resp.POs = append(resp.POs, po)
-				}
-			}
+			return err
+		}
+		resp.Job = &i
 
-			// 3.2 Fetch Installation inside this goroutine since we need Order ID
-			var i execModels.Installation
-			instQuery := `SELECT id, order_id, technical_manager_id, installer_id, agreed_installer_price, start_date, estimated_completion_date, status, installer_job_status, installer_advance_amount, installer_final_amount, client_signoff_url, client_feedback, created_at, updated_at FROM installations WHERE order_id = $1 LIMIT 1`
-			err = s.db.QueryRow(gCtx, instQuery, o.ID).Scan(
-				&i.ID, &i.OrderID, &i.TechnicalManagerID, &i.InstallerID, &i.AgreedInstallerPrice, &i.StartDate, &i.EstimatedCompletionDate, &i.Status, &i.InstallerJobStatus, &i.InstallerAdvanceAmount, &i.InstallerFinalAmount, &i.ClientSignoffURL, &i.ClientFeedback, &i.CreatedAt, &i.UpdatedAt,
-			)
-			if err == nil {
-				resp.Job = &i
-
-				// 3.3 Fetch Site Updates. Same rule as the POs above: a query
-				// error fails the request rather than masquerading as "no
-				// updates" (backend-bugs #16).
-				updQuery := `SELECT id, installation_id, logged_by, update_time, notes, photo_url, created_at FROM installation_updates WHERE installation_id = $1 ORDER BY update_time DESC`
-				updRows, err := s.db.Query(gCtx, updQuery, i.ID)
-				if err != nil {
-					return err
-				}
-				defer updRows.Close()
-				for updRows.Next() {
-					var u execModels.InstallationUpdate
-					if err := updRows.Scan(&u.ID, &u.InstallationID, &u.LoggedBy, &u.UpdateTime, &u.Notes, &u.PhotoURL, &u.CreatedAt); err == nil {
-						resp.SiteUpdates = append(resp.SiteUpdates, u)
-					}
-				}
-			}
+		// 3.3 Site updates through the execution repository.
+		updates, err := s.exec.GetUpdates(gCtx, i.ID)
+		if err != nil {
+			return err
+		}
+		for _, u := range updates {
+			resp.SiteUpdates = append(resp.SiteUpdates, *u)
 		}
 		return nil
 	})
@@ -343,14 +343,14 @@ func (s *BFFService) GetPersonalTimeline(ctx context.Context, userID int) (*Pers
 		defer rows.Close()
 		for rows.Next() {
 			var id int
-			var amount float64
+			var amount int64 // paise (backend-bugs #15)
 			var status string
 			var createdAt time.Time
 			if err := rows.Scan(&id, &amount, &status, &createdAt); err == nil {
 				resp.Events = append(resp.Events, TimelineEvent{
 					ID:          fmt.Sprintf("quote-%d", id),
 					EventType:   "QUOTE_UPDATE",
-					Description: fmt.Sprintf("Quotation #%d (Total: $%.2f) status is %s", id, amount, status),
+					Description: fmt.Sprintf("Quotation #%d (Total: %.2f) status is %s", id, float64(amount)/100, status),
 					Timestamp:   createdAt,
 				})
 			}

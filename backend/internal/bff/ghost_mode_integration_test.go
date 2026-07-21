@@ -6,7 +6,21 @@ import (
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	crmRepo "github.com/spacesioberyl/system-v1/internal/crm/repository"
+	execRepo "github.com/spacesioberyl/system-v1/internal/execution/repository"
+	logRepo "github.com/spacesioberyl/system-v1/internal/logistics/repository"
 )
+
+// newTestService wires the BFF with real repositories against the test pool.
+func newTestService(pool *pgxpool.Pool) *BFFService {
+	return NewBFFService(pool,
+		crmRepo.NewLeadRepository(pool),
+		crmRepo.NewQuotationRepository(pool),
+		logRepo.NewLogisticsRepository(pool),
+		execRepo.NewExecutionRepository(pool),
+	)
+}
 
 // These tests run the real BFF queries against a migrated and seeded database,
 // proving the ghost-mode cash filter is actually wired into each call site —
@@ -55,7 +69,7 @@ func findCard(resp *PipelineResponse, leadID int) *ProjectCard {
 // cash-only project reports zero value to a caller without ghost mode, and its
 // real value to one with it.
 func TestPipelineHidesCashValue(t *testing.T) {
-	svc := NewBFFService(testPool(t))
+	svc := newTestService(testPool(t))
 
 	withoutGhost, err := svc.GetPipeline(ghostCtx("staff", false))
 	if err != nil {
@@ -85,7 +99,7 @@ func TestPipelineHidesCashValue(t *testing.T) {
 // TestProjectDetailsHidesCash covers the other two filtered call sites in
 // GetProjectDetails: the quotation list and the order.
 func TestProjectDetailsHidesCash(t *testing.T) {
-	svc := NewBFFService(testPool(t))
+	svc := newTestService(testPool(t))
 
 	withoutGhost, err := svc.GetProjectDetails(ghostCtx("staff", false), seedCashLeadID)
 	if err != nil {

@@ -194,7 +194,12 @@ func (a *Application) registerExecution() {
 }
 
 func (a *Application) registerBFF() {
-	svc := bff.NewBFFService(a.DB)
+	svc := bff.NewBFFService(a.DB,
+		crmRepo.NewLeadRepository(a.DB),
+		crmRepo.NewQuotationRepository(a.DB),
+		logRepo.NewLogisticsRepository(a.DB),
+		execRepo.NewExecutionRepository(a.DB),
+	)
 	handler := bff.NewBFFHandler(svc)
 	bff.RegisterRoutes(a.Router, a.requireAuth, handler)
 	logger.Log.Info("Module 6 (BFF / Unified UX) registered")
