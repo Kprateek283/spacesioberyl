@@ -48,7 +48,7 @@ func (s *AttendanceService) GetMyAttendance(ctx context.Context, userID int, sta
 }
 
 // ListAll returns all attendance records (admin view) with optional date filter
-func (s *AttendanceService) ListAll(ctx context.Context, date string, limit, offset int) ([]*model.Attendance, error) {
+func (s *AttendanceService) ListAll(ctx context.Context, date string, limit, offset int) ([]*model.Attendance, int, error) {
 	return s.repo.ListAll(ctx, date, limit, offset)
 }
 

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -164,17 +165,10 @@ func TestHRLeaveStateLogic(t *testing.T) {
 	leaveID := int(leaveIDFloat)
 
 	// 2. Admin Rejects Leave
+	leaveIDStr := strconv.Itoa(leaveID)
 	rejectPayload := map[string]string{"status": "rejected", "admin_remarks": "Not allowed"}
 	rejectBody, _ := json.Marshal(rejectPayload)
-	reqReject, _ := http.NewRequest("PATCH", "http://localhost:8080/api/v1/hr/leaves/"+string(rune(leaveID+'0'))+"/status", bytes.NewBuffer(rejectBody)) // simplistic string conversion
-	reqReject.URL.Path = "/api/v1/hr/leaves/" + string(rune(leaveID+'0')) + "/status" // Fix URL building
-    
-    // Better string conversion
-    leaveIDStr := ""
-    if leaveID > 9 { t.Fatalf("Test only supports leave ID < 10 for simplicity") }
-    leaveIDStr = string(rune('0' + leaveID))
-    
-    reqReject, _ = http.NewRequest("PATCH", "http://localhost:8080/api/v1/hr/leaves/"+leaveIDStr+"/status", bytes.NewBuffer(rejectBody))
+	reqReject, _ := http.NewRequest("PATCH", "http://localhost:8080/api/v1/hr/leaves/"+leaveIDStr+"/status", bytes.NewBuffer(rejectBody))
 	reqReject.Header.Set("Content-Type", "application/json")
 	reqReject.Header.Set("Authorization", "Bearer "+token)
 

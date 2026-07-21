@@ -101,7 +101,7 @@ func (h *AttendanceHandler) ListAll(w http.ResponseWriter, r *http.Request) {
 	date := r.URL.Query().Get("date")
 
 	limit, offset := middleware.Paginate(r)
-	records, err := h.svc.ListAll(r.Context(), date, limit, offset)
+	records, total, err := h.svc.ListAll(r.Context(), date, limit, offset)
 	if err != nil {
 		sendHRError(w, http.StatusInternalServerError, "Failed to fetch attendance")
 		return
@@ -109,7 +109,7 @@ func (h *AttendanceHandler) ListAll(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(records)
+	json.NewEncoder(w).Encode(middleware.NewPage(records, total, limit, offset))
 }
 
 // ListOverrides maps to GET /api/v1/hr/attendance/overrides (Admin only)

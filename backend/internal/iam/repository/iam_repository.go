@@ -103,7 +103,13 @@ func (r *IAMRepository) GetUserByID(ctx context.Context, id int) (*model.User, e
 }
 
 // ListUsers fetches all users in the system, ordered by creation date
-func (r *IAMRepository) ListUsers(ctx context.Context, limit, offset int) ([]*model.User, error) {
+// ListUsers returns a page of users plus the total user count (#30).
+func (r *IAMRepository) ListUsers(ctx context.Context, limit, offset int) ([]*model.User, int, error) {
+	var total int
+	if err := r.db.QueryRow(ctx, "SELECT COUNT(*) FROM users").Scan(&total); err != nil {
+		return nil, 0, err
+	}
+
 	query := `
 		SELECT u.id, u.name, u.email, u.password_hash, u.role_id, u.department, u.is_active,
 		       u.pin_hash, u.high_security_pin_hash, r.name as role_name
@@ -114,7 +120,7 @@ func (r *IAMRepository) ListUsers(ctx context.Context, limit, offset int) ([]*mo
 	`
 	rows, err := r.db.Query(ctx, query, limit, offset)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	defer rows.Close()
 
@@ -127,11 +133,11 @@ func (r *IAMRepository) ListUsers(ctx context.Context, limit, offset int) ([]*mo
 			&user.PinHash, &user.HighSecurityPinHash, &user.RoleName,
 		)
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		users = append(users, &user)
 	}
-	return users, rows.Err()
+	return users, total, rows.Err()
 }
 
 // UpdatePassword forcefully updates a user's password hash

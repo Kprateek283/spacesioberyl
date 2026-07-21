@@ -55,19 +55,26 @@ func (r *LeaveRepository) ListByUser(ctx context.Context, userID int) ([]*model.
 }
 
 // ListAll returns all leave records, optionally filtered by status
-func (r *LeaveRepository) ListAll(ctx context.Context, status string, limit, offset int) ([]*model.Leave, error) {
-	query := `SELECT ` + leaveColumns + ` FROM hr_leaves WHERE 1=1`
+// ListAll returns a page of leaves plus the total matching the filter (#30).
+func (r *LeaveRepository) ListAll(ctx context.Context, status string, limit, offset int) ([]*model.Leave, int, error) {
+	where := " WHERE 1=1"
 	args := []interface{}{}
-	argIdx := 1
-
 	if status != "" {
-		query += fmt.Sprintf(" AND status = $%d", argIdx)
+		where += fmt.Sprintf(" AND status = $%d", len(args)+1)
 		args = append(args, status)
 	}
-	query += fmt.Sprintf(" ORDER BY created_at DESC LIMIT $%d OFFSET $%d", len(args)+1, len(args)+2)
+
+	var total int
+	if err := r.db.QueryRow(ctx, "SELECT COUNT(*) FROM hr_leaves"+where, args...).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+
+	query := `SELECT ` + leaveColumns + ` FROM hr_leaves` + where +
+		fmt.Sprintf(" ORDER BY created_at DESC LIMIT $%d OFFSET $%d", len(args)+1, len(args)+2)
 	args = append(args, limit, offset)
 
-	return r.queryLeaves(ctx, query, args...)
+	leaves, err := r.queryLeaves(ctx, query, args...)
+	return leaves, total, err
 }
 
 // GetByID fetches a single leave by ID

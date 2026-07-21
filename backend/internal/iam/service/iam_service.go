@@ -39,7 +39,7 @@ type UserRepository interface {
 	GetRoleIDByName(ctx context.Context, roleName string) (int, error)
 	UpdateUserStatus(ctx context.Context, userID int, isActive bool) error
 	GetUserByID(ctx context.Context, id int) (*model.User, error)
-	ListUsers(ctx context.Context, limit, offset int) ([]*model.User, error)
+	ListUsers(ctx context.Context, limit, offset int) ([]*model.User, int, error)
 	UpdatePassword(ctx context.Context, userID int, newHash string) error
 	SetupPins(ctx context.Context, userID int, pinHash, highSecPinHash string) error
 
@@ -300,10 +300,10 @@ func (s *IAMService) GetUserByID(ctx context.Context, id int) (*dto.UserResponse
 }
 
 // ListUsers fetches all users and maps them to safe DTOs
-func (s *IAMService) ListUsers(ctx context.Context, limit, offset int) ([]*dto.UserResponse, error) {
-	users, err := s.repo.ListUsers(ctx, limit, offset)
+func (s *IAMService) ListUsers(ctx context.Context, limit, offset int) ([]*dto.UserResponse, int, error) {
+	users, total, err := s.repo.ListUsers(ctx, limit, offset)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
 	var response []*dto.UserResponse
@@ -317,7 +317,7 @@ func (s *IAMService) ListUsers(ctx context.Context, limit, offset int) ([]*dto.U
 			IsActive:   u.IsActive,
 		})
 	}
-	return response, nil
+	return response, total, nil
 }
 
 // RefreshToken validates a 30-day token against its server-side record, rotates

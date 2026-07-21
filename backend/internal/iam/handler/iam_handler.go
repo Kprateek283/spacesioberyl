@@ -154,7 +154,7 @@ func (h *IAMHandler) GetMe(w http.ResponseWriter, r *http.Request) {
 // ListUsers maps to GET /api/v1/users (Admin/SuperAdmin only)
 func (h *IAMHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
 	limit, offset := middleware.Paginate(r)
-	users, err := h.svc.ListUsers(r.Context(), limit, offset)
+	users, total, err := h.svc.ListUsers(r.Context(), limit, offset)
 	if err != nil {
 		sendError(w, http.StatusInternalServerError, "Failed to fetch users")
 		return
@@ -162,7 +162,7 @@ func (h *IAMHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(users)
+	json.NewEncoder(w).Encode(middleware.NewPage(users, total, limit, offset))
 }
 
 // RefreshToken maps to POST /api/v1/refresh

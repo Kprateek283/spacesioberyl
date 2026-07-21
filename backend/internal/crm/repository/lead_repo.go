@@ -38,30 +38,32 @@ func (r *LeadRepository) Create(ctx context.Context, l *model.Lead) (*model.Lead
 }
 
 // List returns leads with optional filters
-func (r *LeadRepository) List(ctx context.Context, status string, assignedTo, limit, offset int) ([]*model.Lead, error) {
-	query := `
-		SELECT id, client_name, client_phone, client_email, source, assigned_to, status, lost_reason, created_at, updated_at
-		FROM leads WHERE 1=1
-	`
+// List returns a page of leads plus the total count matching the filters (so
+// callers can paginate). limit/offset bound the returned page (backend-bugs #30).
+func (r *LeadRepository) List(ctx context.Context, status string, assignedTo, limit, offset int) ([]*model.Lead, int, error) {
+	where := " WHERE 1=1"
 	args := []interface{}{}
-	argIdx := 1
-
 	if status != "" {
-		query += fmt.Sprintf(" AND status = $%d", argIdx)
+		where += fmt.Sprintf(" AND status = $%d", len(args)+1)
 		args = append(args, status)
-		argIdx++
 	}
 	if assignedTo > 0 {
-		query += fmt.Sprintf(" AND assigned_to = $%d", argIdx)
+		where += fmt.Sprintf(" AND assigned_to = $%d", len(args)+1)
 		args = append(args, assignedTo)
-		argIdx++
 	}
-	query += fmt.Sprintf(" ORDER BY created_at DESC LIMIT $%d OFFSET $%d", len(args)+1, len(args)+2)
+
+	var total int
+	if err := r.db.QueryRow(ctx, "SELECT COUNT(*) FROM leads"+where, args...).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+
+	query := `SELECT id, client_name, client_phone, client_email, source, assigned_to, status, lost_reason, created_at, updated_at FROM leads` +
+		where + fmt.Sprintf(" ORDER BY created_at DESC LIMIT $%d OFFSET $%d", len(args)+1, len(args)+2)
 	args = append(args, limit, offset)
 
 	rows, err := r.db.Query(ctx, query, args...)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	defer rows.Close()
 
@@ -73,11 +75,11 @@ func (r *LeadRepository) List(ctx context.Context, status string, assignedTo, li
 			&l.Source, &l.AssignedTo, &l.Status, &l.LostReason,
 			&l.CreatedAt, &l.UpdatedAt,
 		); err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		leads = append(leads, &l)
 	}
-	return leads, rows.Err()
+	return leads, total, rows.Err()
 }
 
 // GetByID fetches a single lead

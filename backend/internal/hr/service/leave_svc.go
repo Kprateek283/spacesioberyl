@@ -61,7 +61,7 @@ func (s *LeaveService) MyLeaves(ctx context.Context, userID int) ([]*model.Leave
 }
 
 // ListAll returns all leaves for admin view, with optional status filter
-func (s *LeaveService) ListAll(ctx context.Context, status string, limit, offset int) ([]*model.Leave, error) {
+func (s *LeaveService) ListAll(ctx context.Context, status string, limit, offset int) ([]*model.Leave, int, error) {
 	return s.repo.ListAll(ctx, status, limit, offset)
 }
 

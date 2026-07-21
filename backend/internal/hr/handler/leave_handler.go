@@ -122,7 +122,7 @@ func (h *LeaveHandler) ListAll(w http.ResponseWriter, r *http.Request) {
 	status := r.URL.Query().Get("status")
 
 	limit, offset := middleware.Paginate(r)
-	leaves, err := h.svc.ListAll(r.Context(), status, limit, offset)
+	leaves, total, err := h.svc.ListAll(r.Context(), status, limit, offset)
 	if err != nil {
 		sendHRError(w, http.StatusInternalServerError, "Failed to fetch leaves")
 		return
@@ -130,7 +130,7 @@ func (h *LeaveHandler) ListAll(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(leaves)
+	json.NewEncoder(w).Encode(middleware.NewPage(leaves, total, limit, offset))
 }
 
 // AdminEdit maps to PATCH /api/v1/hr/leaves/:id/admin-edit
