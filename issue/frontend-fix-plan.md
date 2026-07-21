@@ -103,11 +103,13 @@ Every photo, signature and receipt the user captures is swapped for a fabricated
 URL and never transmitted. This is the most damaging item in the report because
 the loss is invisible — the request succeeds and the record persists.
 
-Blocked on the backend: a generic upload endpoint is needed. The backend already
-has a working MinIO uploader but exposes it only through the BFF project-docs
-route. Coordinate this as a joint item, and note it interacts with backend
-plan #12 (private bucket + presigned URLs) — agree the upload contract once,
-covering both the upload response shape and how URLs are later read back.
+Still blocked on the backend: a *generic* upload endpoint is needed. The backend
+exposes its MinIO uploader only through the BFF project-docs route
+(`POST /projects/{id}/docs`) — coordinate a generic `POST /files` as a joint
+item. Backend #12/#31 shipped: the bucket is private and files are read back via
+an **auth-gated `GET /api/v1/files/*`** endpoint (not presigned URLs) — the
+upload response returns `file_url = /api/v1/files/<key>`, fetched with the bearer
+token. See `frontend-handoff.md` §1c.
 
 Client-side work, once the endpoint exists:
 - Upload the file, then send the returned URL in the mutation. Two steps, and
@@ -167,8 +169,9 @@ On startup, when the access token is expired but a refresh token is present,
 attempt a refresh before falling back to signed out. Handle the refresh failing
 (expired, revoked) by clearing storage and going to login, as today.
 
-Sequence this after backend plan #7/#8, which changes refresh-token rotation and
-revocation semantics. Building against the current behaviour risks reworking it.
+Backend #7/#8 has landed: `/refresh` now rotates the refresh token (store the new
+one each time) and reuse of a rotated token revokes the whole family (→ 401,
+re-login). Build against that. See `frontend-handoff.md` §2a.
 
 Show a loading state during the startup refresh so the app does not flash the
 login screen before landing on the workspace.
@@ -185,8 +188,9 @@ every request queued behind it.
 Better: build the throwaway instances from shared base options so a future
 timeout change cannot miss one. The duplication is what caused the gap.
 
-Coordinate the values with the backend's write timeout (backend plan #17) so the
-client does not give up before a legitimately slow endpoint responds.
+Coordinate the values with the backend's write timeout, now 60 s (backend #17
+shipped), so the client does not give up before a legitimately slow endpoint
+responds — set the client receive/send timeouts a little above 60 s.
 
 ### 7. Make the refresh queue race-free
 A request that 401s in the narrow window after the queue is drained but before
@@ -218,8 +222,8 @@ Logout clears local state optimistically, then swallows any error from the
 server call. The optimistic update is fine; the silent swallow is not — the user
 is told they are signed out while the session may remain live server-side.
 
-This gets materially better once backend plan #7 makes logout actually revoke
-the refresh token. Until then, at minimum log the failure. Decide whether the
+This is materially better now that backend #7 makes logout actually revoke the
+refresh token server-side. Still surface the failure (at minimum log it). Decide whether the
 user should be told; for a shared-device scenario, a failed server-side logout
 is something they would want to know about.
 
@@ -262,9 +266,9 @@ as a display-level flag only. Add role checks to the redirect logic for
 role-restricted sections.
 
 Client-side guards are UX, not security — the backend must enforce
-authorization regardless. Note that backend plan #1 is what actually closes the
-BFF exposure; this item only stops users from navigating into screens that will
-fail or show data they should not see.
+authorization regardless. Backend #1 is resolved: the BFF now requires auth, so
+the server-side exposure is closed; this item only stops users from navigating
+into screens that will fail or show data they should not see.
 
 Derive the role from a single source. It is currently read from the stored user
 payload with fallbacks across two possible field names, which suggests the
@@ -335,7 +339,9 @@ generating or at least documenting the API contract in one shared place, and
 adding integration tests that run the Flutter client against a real backend for
 the auth and ghost-mode flows specifically.
 
-**Coordinate these with the backend plan:** item 3 (needs an upload endpoint),
-item 5 (depends on refresh-token semantics), item 6 (timeout values), item 12
-(authorization is enforced server-side), and any money-formatting change from
-backend plan #15.
+**Coordinate these with the backend plan:** item 3 (still needs a generic upload
+endpoint), item 5 (refresh-token semantics — now final), item 6 (timeout values
+— now 60 s), item 12 (authorization is enforced server-side — now including the
+BFF). Backend #15 has shipped: money is int64 **paise** on the wire, so every
+amount field needs ÷100 on display and ×100 on input — see `frontend-handoff.md`
+§1a. The full backend-to-frontend contract is in `frontend-handoff.md`.

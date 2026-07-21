@@ -158,9 +158,10 @@ final Dio _dio = Dio(BaseOptions(
 ```
 
 Only `connectTimeout` is set. A server that accepts the connection then stalls
-(the backend has no write timeout either — see backend report #17) leaves the
-request pending indefinitely, with the UI stuck on its loading spinner and no
-way out but killing the app.
+(backend #17 has since added a 60 s write timeout, but the client must still set
+its own) leaves the request pending indefinitely, with the UI stuck on its
+loading spinner and no way out but killing the app. Align the client timeouts
+above 60 s — see `frontend-handoff.md` §5.
 
 The two throwaway `Dio` instances in `_handle401Error` (`:67`) and
 `_retryOriginalRequest` (`:140`) set *no* timeouts at all, so a stalled refresh
@@ -284,9 +285,10 @@ only. `/logistics`, `/execution`, `/crm` and `/hr` are reachable by any
 authenticated role; the role is passed to the widget as a bare `isAdmin` bool
 (`:77`, `:89`, `:97`) for cosmetic hiding.
 
-That is acceptable *if* the backend enforces authorization — mostly it does, but
-the BFF module does not (backend report #1), so `/home` genuinely leaks data it
-should not.
+That is acceptable *if* the backend enforces authorization — it now does
+everywhere, including the BFF module (backend #1 is resolved: `/api/v1/projects/*`
+and `/api/v1/workspace/*` require auth). So `/home` no longer leaks data
+server-side; client-side role guards remain a UX concern only.
 
 ### 13. Silent no-op when a mutation returns non-200
 
@@ -315,9 +317,10 @@ await _storage.delete(key: 'jwt');
 ```
 
 The optimistic UI update is deliberate and reasonable, but the `catch (_) {}`
-means a failed server-side logout is invisible. Given the backend does not
-revoke refresh tokens on logout at all (backend report #7), the user's session
-remains live server-side while the UI claims they are signed out.
+means a failed server-side logout is invisible. Backend #7 now makes logout
+genuinely revoke server-side, so a *successful* logout truly ends the session —
+which makes surfacing a *failed* one more important, not less: on failure the
+session really does stay live while the UI claims otherwise.
 
 ### 15. Inconsistent project structure
 
