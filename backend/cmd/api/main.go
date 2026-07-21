@@ -3,6 +3,9 @@ package main
 import (
 	"context"
 	"log"
+	"net/http"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -48,18 +51,41 @@ func main() {
 	if err := broker.InitRabbitMQ(cfg.RabbitMQURL); err != nil {
 		log.Fatalf("Unable to connect to RabbitMQ: %v", err)
 	}
-	defer broker.Conn.Close()
-	defer broker.Channel.Close()
+	defer broker.Close()
 
-	// 5. Initialize MinIO Storage
+	// 5. Initialize MinIO Storage. Fatal on failure: a non-fatal init trades a
+	// loud startup error for a confusing 500 (or, pre-guard, a panic) at an
+	// arbitrary later upload (backend-bugs #18).
 	if err := storage.InitMinIO(cfg.MinIOEndpoint, cfg.MinIOAccessKey, cfg.MinIOSecretKey, cfg.MinIOBucket, cfg.MinIOUseSSL, cfg.MinIOPublicURL); err != nil {
-		// MinIO failure is non-fatal — quotation PDFs will fail but the API will still run
-		logger.Log.Error("MinIO initialization failed (PDF generation will be unavailable)", "error", err)
+		log.Fatalf("Unable to initialize MinIO storage: %v", err)
 	}
 
-	// 7. Create and start the Application
+	// 7. Create and start the Application.
+	// The JWT secret is passed to the middleware via app.New — no env round-trip.
 	application := app.New(dbPool, cfg)
-	if err := application.Start(); err != nil {
-		log.Fatalf("Server failed to start: %v", err)
+
+	// Run the server in the background and wait for either a fatal serve error or
+	// a shutdown signal. On signal, drain in-flight requests within a bounded
+	// window so this function returns normally and the deferred DB pool / broker
+	// closes above actually run (backend-bugs #17).
+	serveErr := make(chan error, 1)
+	go func() { serveErr <- application.Start() }()
+
+	sigCtx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+
+	select {
+	case err := <-serveErr:
+		if err != nil && err != http.ErrServerClosed {
+			log.Fatalf("Server failed to start: %v", err)
+		}
+	case <-sigCtx.Done():
+		stop() // stop intercepting signals; a second Ctrl-C now force-quits
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+		if err := application.Shutdown(shutdownCtx); err != nil {
+			logger.Log.Error("Graceful shutdown failed", "error", err)
+		}
 	}
+	logger.Log.Info("Spacesio Beryl API stopped")
 }

@@ -56,7 +56,7 @@ services:
       sleep 5;
       /usr/bin/mc config host add myminio http://minio:9000 admin securepassword;
       /usr/bin/mc mb myminio/crm-files --ignore-existing;
-      /usr/bin/mc anonymous set public myminio/crm-files;
+      /usr/bin/mc anonymous set none myminio/crm-files;
       exit 0;
       "
 

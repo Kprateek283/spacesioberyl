@@ -115,6 +115,10 @@ var protectedRoutes = []string{
 	"POST /api/v1/projects/{id}/docs",
 	"GET /api/v1/workspace/action-items",
 	"GET /api/v1/workspace/personal-timeline",
+
+	// Authenticated file access for the private bucket (backend-bugs.md #12).
+	// chi.Walk yields "/api/v1/files/*"; the walk key strips the "/*" suffix.
+	"GET /api/v1/files",
 }
 
 // buildTestRouter wires the real application router. The pool is never

@@ -1,9 +1,11 @@
 package app
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
@@ -52,6 +54,7 @@ type Application struct {
 	Router *chi.Mux
 	DB     *pgxpool.Pool
 	Config *config.Config
+	srv    *http.Server
 
 	// requireAuth is built once from the configured secret and shared by every module,
 	// so the signing key never travels through the process environment.
@@ -66,10 +69,15 @@ func New(db *pgxpool.Pool, cfg *config.Config) *Application {
 		requireAuth: appmiddleware.RequireAuth(cfg.JWTSecret),
 	}
 
-	// Chi's built-in middleware
+	// Chi's built-in middleware.
+	// RealIP is deliberately NOT used: the API is directly exposed (no reverse
+	// proxy strips forwarded headers), so trusting X-Forwarded-For/X-Real-IP
+	// would let a client spoof its address and defeat rate limiting and the
+	// attendance geofence. r.RemoteAddr (the socket peer) is the trusted source
+	// (backend-bugs #4/#11).
 	app.Router.Use(chimiddleware.Logger)
 	app.Router.Use(chimiddleware.Recoverer)
-	app.Router.Use(chimiddleware.RealIP) // Ensures r.RemoteAddr is the real client IP
+	app.Router.Use(appmiddleware.LimitBody) // bound request bodies (backend-bugs #19)
 	app.Router.Use(appmiddleware.CORS)
 
 	// System routes
@@ -82,6 +90,19 @@ func New(db *pgxpool.Pool, cfg *config.Config) *Application {
 	app.registerLogistics()
 	app.registerExecution()
 	app.registerBFF()
+
+	// Explicit server with timeouts. A bare ListenAndServe is Slowloris-exposed
+	// and lets a stalled client pin a goroutine forever (backend-bugs #17).
+	// WriteTimeout is generous to accommodate the slowest legitimate endpoints
+	// (file upload, PDF generation) — tune with real measurements.
+	app.srv = &http.Server{
+		Addr:              fmt.Sprintf(":%s", cfg.APIPort),
+		Handler:           app.Router,
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       15 * time.Second,
+		WriteTimeout:      60 * time.Second,
+		IdleTimeout:       120 * time.Second,
+	}
 
 	return app
 }
@@ -179,8 +200,17 @@ func (a *Application) registerBFF() {
 	logger.Log.Info("Module 6 (BFF / Unified UX) registered")
 }
 
+// Start blocks serving requests until the server is shut down. It returns
+// http.ErrServerClosed after a graceful Shutdown, which the caller treats as a
+// clean exit.
 func (a *Application) Start() error {
-	addr := fmt.Sprintf(":%s", a.Config.APIPort)
-	logger.Log.Info("Starting Spacesio Beryl API Server", "address", addr)
-	return http.ListenAndServe(addr, a.Router)
+	logger.Log.Info("Starting Spacesio Beryl API Server", "address", a.srv.Addr)
+	return a.srv.ListenAndServe()
+}
+
+// Shutdown drains in-flight requests within ctx's deadline, then stops the
+// server so main's deferred pool/broker closes can run (backend-bugs #17).
+func (a *Application) Shutdown(ctx context.Context) error {
+	logger.Log.Info("Shutting down API server, draining in-flight requests...")
+	return a.srv.Shutdown(ctx)
 }

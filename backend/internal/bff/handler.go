@@ -2,12 +2,15 @@ package bff
 
 import (
 	"encoding/json"
+	"errors"
+	"io"
 	"net/http"
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/spacesioberyl/system-v1/internal/logger"
 	"github.com/spacesioberyl/system-v1/internal/middleware"
+	"github.com/spacesioberyl/system-v1/internal/storage"
 )
 
 // callerID returns the authenticated user's ID from the request context.
@@ -48,7 +51,7 @@ func (h *BFFHandler) GetPipeline(w http.ResponseWriter, r *http.Request) {
 // GetProjectDetails handles GET /api/v1/projects/{id}/details
 func (h *BFFHandler) GetProjectDetails(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	
+
 	idStr := chi.URLParam(r, "id")
 	projectID, err := strconv.Atoi(idStr)
 	if err != nil {
@@ -73,7 +76,7 @@ func (h *BFFHandler) GetProjectDetails(w http.ResponseWriter, r *http.Request) {
 // UploadProjectDocument handles POST /api/v1/projects/{id}/docs
 func (h *BFFHandler) UploadProjectDocument(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	
+
 	idStr := chi.URLParam(r, "id")
 	projectID, err := strconv.Atoi(idStr)
 	if err != nil {
@@ -115,6 +118,10 @@ func (h *BFFHandler) UploadProjectDocument(w http.ResponseWriter, r *http.Reques
 
 	doc, err := h.service.UploadProjectDocument(ctx, projectID, uploaderID, documentType, fileHeader.Filename, file, fileHeader.Size, contentType)
 	if err != nil {
+		if errors.Is(err, ErrUnsupportedFileType) {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
 		logger.Log.Error("Failed to upload project document", "error", err, "projectID", projectID)
 		http.Error(w, "Failed to upload document", http.StatusInternalServerError)
 		return
@@ -130,7 +137,7 @@ func (h *BFFHandler) UploadProjectDocument(w http.ResponseWriter, r *http.Reques
 // GetActionItems handles GET /api/v1/workspace/action-items
 func (h *BFFHandler) GetActionItems(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	
+
 	userID, ok := callerID(r)
 	if !ok {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
@@ -151,7 +158,7 @@ func (h *BFFHandler) GetActionItems(w http.ResponseWriter, r *http.Request) {
 // GetPersonalTimeline handles GET /api/v1/workspace/personal-timeline
 func (h *BFFHandler) GetPersonalTimeline(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	
+
 	userID, ok := callerID(r)
 	if !ok {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
@@ -167,6 +174,34 @@ func (h *BFFHandler) GetPersonalTimeline(w http.ResponseWriter, r *http.Request)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp)
+}
+
+// ServeFile streams a stored object out of the now-private bucket to an
+// authenticated caller. It is the only read path for uploaded files, replacing
+// the public bucket URLs (backend-bugs #12).
+func (h *BFFHandler) ServeFile(w http.ResponseWriter, r *http.Request) {
+	if _, ok := callerID(r); !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+	key := chi.URLParam(r, "*")
+	if key == "" {
+		http.Error(w, "File key is required", http.StatusBadRequest)
+		return
+	}
+
+	obj, contentType, err := storage.DownloadFile(r.Context(), key)
+	if err != nil {
+		logger.Log.Error("Failed to fetch file from storage", "error", err, "key", key)
+		http.Error(w, "File not found", http.StatusNotFound)
+		return
+	}
+	defer obj.Close()
+
+	w.Header().Set("Content-Type", contentType)
+	if _, err := io.Copy(w, obj); err != nil {
+		logger.Log.Error("Failed to stream file", "error", err, "key", key)
+	}
 }
 
 // RegisterRoutes registers the unified BFF endpoints
@@ -186,5 +221,11 @@ func RegisterRoutes(r chi.Router, requireAuth func(http.Handler) http.Handler, h
 
 		r.Get("/action-items", h.GetActionItems)
 		r.Get("/personal-timeline", h.GetPersonalTimeline)
+	})
+
+	// Authenticated file access for the private bucket (backend-bugs #12).
+	r.Route("/api/v1/files", func(r chi.Router) {
+		r.Use(requireAuth)
+		r.Get("/*", h.ServeFile)
 	})
 }

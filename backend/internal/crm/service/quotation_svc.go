@@ -203,12 +203,14 @@ func (s *QuotationService) generateAndUploadPDF(ctx context.Context, q *model.Qu
 		return "", fmt.Errorf("failed to generate PDF: %w", err)
 	}
 
-	// Upload to MinIO
+	// Upload to the private bucket. UploadFile returns the object key; the stored
+	// value routes through the authenticated /api/v1/files endpoint rather than a
+	// public URL (backend-bugs #12).
 	objectName := fmt.Sprintf("quotations/%d/QT-%06d_%s.pdf", q.LeadID, q.ID, time.Now().Format("20060102"))
-	url, err := storage.UploadFile(ctx, objectName, &buf, int64(buf.Len()), "application/pdf")
+	key, err := storage.UploadFile(ctx, objectName, &buf, int64(buf.Len()), "application/pdf")
 	if err != nil {
 		return "", err
 	}
 
-	return url, nil
+	return "/api/v1/files/" + key, nil
 }

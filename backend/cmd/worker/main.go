@@ -16,8 +16,8 @@ import (
 	"github.com/spacesioberyl/system-v1/internal/broker"
 	"github.com/spacesioberyl/system-v1/internal/config"
 	crmRepo "github.com/spacesioberyl/system-v1/internal/crm/repository"
-	logRepo "github.com/spacesioberyl/system-v1/internal/logistics/repository"
 	"github.com/spacesioberyl/system-v1/internal/logger"
+	logRepo "github.com/spacesioberyl/system-v1/internal/logistics/repository"
 )
 
 // CONFIGURABLE THRESHOLDS (adjust these as needed)
@@ -71,18 +71,22 @@ func main() {
 		}
 		time.Sleep(3 * time.Second)
 	}
-	defer broker.Conn.Close()
-	defer broker.Channel.Close()
+	defer broker.Close()
 
 	// 3. Initialize repositories (the worker reads/writes directly to the DB)
 	complaintRepo := crmRepo.NewComplaintRepository(dbPool)
 	followUpRepo := crmRepo.NewFollowUpRepository(dbPool)
 	logisticsRepo := logRepo.NewLogisticsRepository(dbPool)
 
-	// 4. Start queue consumers (goroutines)
-	go consumeQuoteApproved(logisticsRepo)
-	go consumeInstallationSignoff(dbPool)
-	go consumeWhatsApp(cfg)
+	// 4. Start queue consumers, each supervised so it restarts after a broker
+	// reconnect rather than dying on the first connection drop (backend-bugs #14).
+	go superviseConsumer("quote_approved", func() error { return consumeQuoteApproved(logisticsRepo) })
+	go superviseConsumer("installation_signoff", func() error { return consumeInstallationSignoff(dbPool) })
+	if cfg.WhatsAppToken != "" && cfg.WhatsAppPhoneID != "" {
+		go superviseConsumer("whatsapp_queue", func() error { return consumeWhatsApp(cfg) })
+	} else {
+		logger.Log.Warn("WhatsApp consumer disabled — WHATSAPP_TOKEN or WHATSAPP_PHONE_ID not set")
+	}
 
 	// 5. Start cron jobs (goroutines)
 	go runCronJob("Complaint Escalation", CronIntervalMinutes, func() {
@@ -110,18 +114,31 @@ type QuoteApprovedEvent struct {
 	PaymentTermType string `json:"payment_term_type"`
 }
 
-func consumeQuoteApproved(logisticsRepo *logRepo.LogisticsRepository) {
+// superviseConsumer runs a consumer and restarts it after any exit — an error
+// (broker unreachable) or a clean return (the delivery channel closed on a
+// connection drop). The broker's own reconnect watcher refreshes the shared
+// connection in the background, so the next attempt picks it up (backend-bugs #14).
+func superviseConsumer(name string, run func() error) {
+	for {
+		if err := run(); err != nil {
+			logger.Log.Error("Consumer stopped, restarting", "queue", name, "error", err)
+		} else {
+			logger.Log.Warn("Consumer delivery channel closed, restarting", "queue", name)
+		}
+		time.Sleep(3 * time.Second)
+	}
+}
+
+func consumeQuoteApproved(logisticsRepo *logRepo.LogisticsRepository) error {
 	ch, err := broker.Conn.Channel()
 	if err != nil {
-		logger.Log.Error("Failed to open channel for quote_approved consumer", "error", err)
-		return
+		return fmt.Errorf("open channel: %w", err)
 	}
 	defer ch.Close()
 
 	msgs, err := ch.Consume(broker.QueueQuoteApproved, "worker-quote", false, false, false, false, nil)
 	if err != nil {
-		logger.Log.Error("Failed to start consuming quote_approved queue", "error", err)
-		return
+		return fmt.Errorf("start consuming: %w", err)
 	}
 
 	logger.Log.Info("Consumer started", "queue", broker.QueueQuoteApproved)
@@ -129,6 +146,7 @@ func consumeQuoteApproved(logisticsRepo *logRepo.LogisticsRepository) {
 	for msg := range msgs {
 		processQuoteApproved(msg, logisticsRepo)
 	}
+	return nil // delivery channel closed → supervisor restarts
 }
 
 func processQuoteApproved(msg amqp.Delivery, logisticsRepo *logRepo.LogisticsRepository) {
@@ -162,18 +180,18 @@ type InstallationSignoffEvent struct {
 	OrderID        int `json:"order_id"`
 }
 
-func consumeInstallationSignoff(dbPool *pgxpool.Pool) {
+func consumeInstallationSignoff(dbPool *pgxpool.Pool) error {
 	ch, err := broker.Conn.Channel()
 	if err != nil {
-		logger.Log.Error("Failed to open channel for installation_signoff consumer", "error", err)
-		return
+		return fmt.Errorf("open channel: %w", err)
 	}
 	defer ch.Close()
 
-	msgs, err := ch.Consume(broker.QueueInstallationSignoff, "worker-signoff", true, false, false, false, nil)
+	// Manual ack so a poison or transiently-failing message is handled
+	// explicitly rather than silently dropped by auto-ack (backend-bugs #14).
+	msgs, err := ch.Consume(broker.QueueInstallationSignoff, "worker-signoff", false, false, false, false, nil)
 	if err != nil {
-		logger.Log.Error("Failed to start consuming installation_signoff queue", "error", err)
-		return
+		return fmt.Errorf("start consuming: %w", err)
 	}
 
 	logger.Log.Info("Consumer started", "queue", broker.QueueInstallationSignoff)
@@ -181,12 +199,16 @@ func consumeInstallationSignoff(dbPool *pgxpool.Pool) {
 	for msg := range msgs {
 		processInstallationSignoff(msg, dbPool)
 	}
+	return nil // delivery channel closed → supervisor restarts
 }
 
 func processInstallationSignoff(msg amqp.Delivery, dbPool *pgxpool.Pool) {
 	var event InstallationSignoffEvent
 	if err := json.Unmarshal(msg.Body, &event); err != nil {
+		// Unparseable message: reject without requeue so it dead-letters for
+		// inspection instead of looping forever.
 		logger.Log.Error("Failed to unmarshal installation_signoff event", "error", err)
+		_ = msg.Nack(false, false)
 		return
 	}
 
@@ -202,8 +224,10 @@ func processInstallationSignoff(msg amqp.Delivery, dbPool *pgxpool.Pool) {
 		 WHERE o.id = $1`, event.OrderID,
 	).Scan(&paymentTermType)
 	if err != nil {
+		// Transient (DB blip) — requeue for another attempt.
 		logger.Log.Error("Financial Lock: Failed to look up payment terms",
 			"order_id", event.OrderID, "error", err)
+		_ = msg.Nack(false, true)
 		return
 	}
 
@@ -221,8 +245,13 @@ func processInstallationSignoff(msg amqp.Delivery, dbPool *pgxpool.Pool) {
 		event.OrderID,
 	)
 	if err != nil {
+		// The status update is idempotent, so requeue on a transient failure.
 		logger.Log.Error("Financial Lock: Failed to update order status", "order_id", event.OrderID, "error", err)
+		_ = msg.Nack(false, true)
+		return
 	}
+
+	_ = msg.Ack(false)
 }
 
 // =====================================================
