@@ -66,7 +66,11 @@ func (s *BFFService) GetPipeline(ctx context.Context) (*PipelineResponse, error)
 		LEFT JOIN orders o ON o.lead_id = l.id
 		LEFT JOIN installations i ON i.order_id = o.id
 		ORDER BY l.updated_at DESC
+		LIMIT 200
 	`
+	// The pipeline is a kanban dashboard, not a paged list, so it carries a fixed
+	// upper bound rather than limit/offset params — enough for the board while
+	// keeping the query from scanning the whole leads table (backend-bugs #30).
 
 	rows, err := s.db.Query(ctx, query)
 	if err != nil {

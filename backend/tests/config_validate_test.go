@@ -25,7 +25,14 @@ func TestJWTSecretValidation(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			err := (&config.Config{JWTSecret: tc.secret}).Validate()
+			// The other required secrets are supplied so this isolates JWT_SECRET.
+			cfg := &config.Config{
+				JWTSecret:      tc.secret,
+				DatabaseURL:    "postgres://x",
+				MinIOAccessKey: "k",
+				MinIOSecretKey: "s",
+			}
+			err := cfg.Validate()
 			if tc.wantError && err == nil {
 				t.Errorf("Validate() accepted a %d-byte secret, want rejection", len(tc.secret))
 			}
@@ -33,5 +40,35 @@ func TestJWTSecretValidation(t *testing.T) {
 				t.Errorf("Validate() rejected a %d-byte secret: %v", len(tc.secret), err)
 			}
 		})
+	}
+}
+
+// TestRequiredSecretsValidation covers backend-bugs.md #25: secrets have no
+// defaults, so an unset DATABASE_URL or MinIO credential must fail at boot
+// rather than fall back to a shipped credential.
+func TestRequiredSecretsValidation(t *testing.T) {
+	goodSecret := strings.Repeat("x", config.MinJWTSecretLen)
+	base := func() *config.Config {
+		return &config.Config{
+			JWTSecret:      goodSecret,
+			DatabaseURL:    "postgres://x",
+			MinIOAccessKey: "k",
+			MinIOSecretKey: "s",
+		}
+	}
+	if err := base().Validate(); err != nil {
+		t.Fatalf("fully-populated config rejected: %v", err)
+	}
+
+	missingDB := base()
+	missingDB.DatabaseURL = ""
+	if missingDB.Validate() == nil {
+		t.Error("Validate() accepted an empty DATABASE_URL, want rejection")
+	}
+
+	missingMinIO := base()
+	missingMinIO.MinIOSecretKey = ""
+	if missingMinIO.Validate() == nil {
+		t.Error("Validate() accepted an empty MINIO_SECRET_KEY, want rejection")
 	}
 }

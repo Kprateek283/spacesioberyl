@@ -38,7 +38,7 @@ func (r *ExpenseRepository) Create(ctx context.Context, e *model.Expense) (*mode
 }
 
 // List returns expenses with optional date and user filters
-func (r *ExpenseRepository) List(ctx context.Context, startDate, endDate string, loggedBy int) ([]*model.Expense, error) {
+func (r *ExpenseRepository) List(ctx context.Context, startDate, endDate string, loggedBy, limit, offset int) ([]*model.Expense, error) {
 	query := `
 		SELECT id, logged_by, amount, person_paid, context, expense_date, receipt_url, created_at, updated_at
 		FROM office_expenses WHERE 1=1
@@ -61,7 +61,8 @@ func (r *ExpenseRepository) List(ctx context.Context, startDate, endDate string,
 		args = append(args, loggedBy)
 		argIdx++
 	}
-	query += " ORDER BY expense_date DESC, created_at DESC"
+	query += fmt.Sprintf(" ORDER BY expense_date DESC, created_at DESC LIMIT $%d OFFSET $%d", len(args)+1, len(args)+2)
+	args = append(args, limit, offset)
 
 	rows, err := r.db.Query(ctx, query, args...)
 	if err != nil {

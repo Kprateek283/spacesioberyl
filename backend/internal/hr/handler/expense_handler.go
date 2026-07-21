@@ -50,7 +50,8 @@ func (h *ExpenseHandler) List(w http.ResponseWriter, r *http.Request) {
 	endDate := r.URL.Query().Get("end_date")
 	loggedBy, _ := strconv.Atoi(r.URL.Query().Get("logged_by"))
 
-	expenses, err := h.svc.List(r.Context(), startDate, endDate, loggedBy)
+	limit, offset := middleware.Paginate(r)
+	expenses, err := h.svc.List(r.Context(), startDate, endDate, loggedBy, limit, offset)
 	if err != nil {
 		sendHRError(w, http.StatusInternalServerError, "Failed to fetch expenses")
 		return

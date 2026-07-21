@@ -55,7 +55,7 @@ func (r *LeaveRepository) ListByUser(ctx context.Context, userID int) ([]*model.
 }
 
 // ListAll returns all leave records, optionally filtered by status
-func (r *LeaveRepository) ListAll(ctx context.Context, status string) ([]*model.Leave, error) {
+func (r *LeaveRepository) ListAll(ctx context.Context, status string, limit, offset int) ([]*model.Leave, error) {
 	query := `SELECT ` + leaveColumns + ` FROM hr_leaves WHERE 1=1`
 	args := []interface{}{}
 	argIdx := 1
@@ -64,7 +64,8 @@ func (r *LeaveRepository) ListAll(ctx context.Context, status string) ([]*model.
 		query += fmt.Sprintf(" AND status = $%d", argIdx)
 		args = append(args, status)
 	}
-	query += " ORDER BY created_at DESC"
+	query += fmt.Sprintf(" ORDER BY created_at DESC LIMIT $%d OFFSET $%d", len(args)+1, len(args)+2)
+	args = append(args, limit, offset)
 
 	return r.queryLeaves(ctx, query, args...)
 }
@@ -83,7 +84,10 @@ func (r *LeaveRepository) GetByID(ctx context.Context, id int) (*model.Leave, er
 }
 
 // UserEdit updates dates/reason of a leave (only if still pending)
-func (r *LeaveRepository) UserEdit(ctx context.Context, id int, startDate, endDate *time.Time, reason string) error {
+// UserEdit updates a user's own pending leave. Ownership and status are enforced
+// in the WHERE clause (like Cancel) so the check and the write are one atomic
+// statement — no read-then-write race (backend-bugs #29).
+func (r *LeaveRepository) UserEdit(ctx context.Context, id, userID int, startDate, endDate *time.Time, reason string) error {
 	query := `UPDATE hr_leaves SET updated_at = CURRENT_TIMESTAMP`
 	args := []interface{}{}
 	argIdx := 1
@@ -104,15 +108,15 @@ func (r *LeaveRepository) UserEdit(ctx context.Context, id int, startDate, endDa
 		argIdx++
 	}
 
-	query += fmt.Sprintf(" WHERE id = $%d AND status = 'pending'", argIdx)
-	args = append(args, id)
+	query += fmt.Sprintf(" WHERE id = $%d AND user_id = $%d AND status = 'pending'", argIdx, argIdx+1)
+	args = append(args, id, userID)
 
 	tag, err := r.db.Exec(ctx, query, args...)
 	if err != nil {
 		return err
 	}
 	if tag.RowsAffected() == 0 {
-		return errors.New("leave not found or cannot be edited (status is not pending)")
+		return errors.New("leave not found, not yours, or cannot be edited (status is not pending)")
 	}
 	return nil
 }

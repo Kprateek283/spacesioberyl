@@ -78,7 +78,7 @@ func New(db *pgxpool.Pool, cfg *config.Config) *Application {
 	app.Router.Use(chimiddleware.Logger)
 	app.Router.Use(chimiddleware.Recoverer)
 	app.Router.Use(appmiddleware.LimitBody) // bound request bodies (backend-bugs #19)
-	app.Router.Use(appmiddleware.CORS)
+	app.Router.Use(appmiddleware.CORS(cfg.CORSAllowedOrigins))
 
 	// System routes
 	app.registerSystemRoutes()

@@ -39,9 +39,11 @@ func RegisterRoutes(r chi.Router, requireAuth func(http.Handler) http.Handler, a
 			// Any authenticated user can log an expense
 			r.Post("/", expH.Create)
 
-			// Admin / Super Admin / Accounts can view the ledger
+			// Admin / Super Admin / Accounts can view the ledger.
+			// "accounts" is included provisionally — revisit if the ledger should
+			// be restricted further (backend-bugs #28).
 			r.Group(func(r chi.Router) {
-				r.Use(middleware.RequireRole("admin", "super_admin"))
+				r.Use(middleware.RequireRole("admin", "super_admin", "accounts"))
 				r.Get("/", expH.List)
 				r.Get("/{id}", expH.GetByID)
 			})

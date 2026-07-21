@@ -103,15 +103,16 @@ func (r *IAMRepository) GetUserByID(ctx context.Context, id int) (*model.User, e
 }
 
 // ListUsers fetches all users in the system, ordered by creation date
-func (r *IAMRepository) ListUsers(ctx context.Context) ([]*model.User, error) {
+func (r *IAMRepository) ListUsers(ctx context.Context, limit, offset int) ([]*model.User, error) {
 	query := `
 		SELECT u.id, u.name, u.email, u.password_hash, u.role_id, u.department, u.is_active,
 		       u.pin_hash, u.high_security_pin_hash, r.name as role_name
 		FROM users u
 		JOIN roles r ON u.role_id = r.id
 		ORDER BY u.created_at DESC
+		LIMIT $1 OFFSET $2
 	`
-	rows, err := r.db.Query(ctx, query)
+	rows, err := r.db.Query(ctx, query, limit, offset)
 	if err != nil {
 		return nil, err
 	}

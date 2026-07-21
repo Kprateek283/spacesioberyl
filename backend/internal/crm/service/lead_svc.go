@@ -43,8 +43,8 @@ func (s *LeadService) Create(ctx context.Context, req dto.CreateLeadRequest) (*m
 	return s.repo.Create(ctx, lead)
 }
 
-func (s *LeadService) List(ctx context.Context, status string, assignedTo int) ([]*model.Lead, error) {
-	return s.repo.List(ctx, status, assignedTo)
+func (s *LeadService) List(ctx context.Context, status string, assignedTo, limit, offset int) ([]*model.Lead, error) {
+	return s.repo.List(ctx, status, assignedTo, limit, offset)
 }
 
 func (s *LeadService) GetByID(ctx context.Context, id int) (*model.Lead, error) {

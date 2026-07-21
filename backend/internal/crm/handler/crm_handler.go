@@ -47,7 +47,8 @@ func (h *LeadHandler) List(w http.ResponseWriter, r *http.Request) {
 	status := r.URL.Query().Get("status")
 	assignedTo, _ := strconv.Atoi(r.URL.Query().Get("assigned_to"))
 
-	leads, err := h.svc.List(r.Context(), status, assignedTo)
+	limit, offset := middleware.Paginate(r)
+	leads, err := h.svc.List(r.Context(), status, assignedTo, limit, offset)
 	if err != nil {
 		sendCRMError(w, http.StatusInternalServerError, "Failed to fetch leads")
 		return

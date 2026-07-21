@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -107,7 +108,7 @@ func (r *AttendanceRepository) GetMyAttendance(ctx context.Context, userID int, 
 }
 
 // ListAll returns all attendance records with optional date filter (Admin view)
-func (r *AttendanceRepository) ListAll(ctx context.Context, date string) ([]*model.Attendance, error) {
+func (r *AttendanceRepository) ListAll(ctx context.Context, date string, limit, offset int) ([]*model.Attendance, error) {
 	query := `
 		SELECT id, user_id, date, check_in_time, check_out_time, status, ip_address, is_office_wifi,
 		       override_reason, override_status, override_rejected_reason, reviewed_by, created_at, updated_at
@@ -119,7 +120,8 @@ func (r *AttendanceRepository) ListAll(ctx context.Context, date string) ([]*mod
 		query += ` WHERE date = $1`
 		args = append(args, date)
 	}
-	query += ` ORDER BY date DESC, user_id ASC`
+	query += fmt.Sprintf(" ORDER BY date DESC, user_id ASC LIMIT $%d OFFSET $%d", len(args)+1, len(args)+2)
+	args = append(args, limit, offset)
 
 	return r.scanAttendances(ctx, query, args...)
 }

@@ -153,7 +153,8 @@ func (h *IAMHandler) GetMe(w http.ResponseWriter, r *http.Request) {
 
 // ListUsers maps to GET /api/v1/users (Admin/SuperAdmin only)
 func (h *IAMHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
-	users, err := h.svc.ListUsers(r.Context())
+	limit, offset := middleware.Paginate(r)
+	users, err := h.svc.ListUsers(r.Context(), limit, offset)
 	if err != nil {
 		sendError(w, http.StatusInternalServerError, "Failed to fetch users")
 		return

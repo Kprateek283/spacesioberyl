@@ -38,7 +38,7 @@ func (r *LeadRepository) Create(ctx context.Context, l *model.Lead) (*model.Lead
 }
 
 // List returns leads with optional filters
-func (r *LeadRepository) List(ctx context.Context, status string, assignedTo int) ([]*model.Lead, error) {
+func (r *LeadRepository) List(ctx context.Context, status string, assignedTo, limit, offset int) ([]*model.Lead, error) {
 	query := `
 		SELECT id, client_name, client_phone, client_email, source, assigned_to, status, lost_reason, created_at, updated_at
 		FROM leads WHERE 1=1
@@ -56,7 +56,8 @@ func (r *LeadRepository) List(ctx context.Context, status string, assignedTo int
 		args = append(args, assignedTo)
 		argIdx++
 	}
-	query += " ORDER BY created_at DESC"
+	query += fmt.Sprintf(" ORDER BY created_at DESC LIMIT $%d OFFSET $%d", len(args)+1, len(args)+2)
+	args = append(args, limit, offset)
 
 	rows, err := r.db.Query(ctx, query, args...)
 	if err != nil {

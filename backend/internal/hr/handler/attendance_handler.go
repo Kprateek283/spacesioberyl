@@ -100,7 +100,8 @@ func (h *AttendanceHandler) GetMyAttendance(w http.ResponseWriter, r *http.Reque
 func (h *AttendanceHandler) ListAll(w http.ResponseWriter, r *http.Request) {
 	date := r.URL.Query().Get("date")
 
-	records, err := h.svc.ListAll(r.Context(), date)
+	limit, offset := middleware.Paginate(r)
+	records, err := h.svc.ListAll(r.Context(), date, limit, offset)
 	if err != nil {
 		sendHRError(w, http.StatusInternalServerError, "Failed to fetch attendance")
 		return

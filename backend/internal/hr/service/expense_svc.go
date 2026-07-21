@@ -55,8 +55,8 @@ func (s *ExpenseService) Create(ctx context.Context, userID int, req dto.CreateE
 }
 
 // List returns expenses with optional filters
-func (s *ExpenseService) List(ctx context.Context, startDate, endDate string, loggedBy int) ([]*model.Expense, error) {
-	return s.repo.List(ctx, startDate, endDate, loggedBy)
+func (s *ExpenseService) List(ctx context.Context, startDate, endDate string, loggedBy, limit, offset int) ([]*model.Expense, error) {
+	return s.repo.List(ctx, startDate, endDate, loggedBy, limit, offset)
 }
 
 // GetByID returns a single expense record

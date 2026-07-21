@@ -39,7 +39,7 @@ type UserRepository interface {
 	GetRoleIDByName(ctx context.Context, roleName string) (int, error)
 	UpdateUserStatus(ctx context.Context, userID int, isActive bool) error
 	GetUserByID(ctx context.Context, id int) (*model.User, error)
-	ListUsers(ctx context.Context) ([]*model.User, error)
+	ListUsers(ctx context.Context, limit, offset int) ([]*model.User, error)
 	UpdatePassword(ctx context.Context, userID int, newHash string) error
 	SetupPins(ctx context.Context, userID int, pinHash, highSecPinHash string) error
 
@@ -300,8 +300,8 @@ func (s *IAMService) GetUserByID(ctx context.Context, id int) (*dto.UserResponse
 }
 
 // ListUsers fetches all users and maps them to safe DTOs
-func (s *IAMService) ListUsers(ctx context.Context) ([]*dto.UserResponse, error) {
-	users, err := s.repo.ListUsers(ctx)
+func (s *IAMService) ListUsers(ctx context.Context, limit, offset int) ([]*dto.UserResponse, error) {
+	users, err := s.repo.ListUsers(ctx, limit, offset)
 	if err != nil {
 		return nil, err
 	}
