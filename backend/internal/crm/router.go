@@ -1,16 +1,18 @@
 package crm
 
 import (
+	"net/http"
+
 	"github.com/go-chi/chi/v5"
 	"github.com/spacesioberyl/system-v1/internal/crm/handler"
 	"github.com/spacesioberyl/system-v1/internal/middleware"
 )
 
 // RegisterRoutes connects all CRM endpoints under /api/v1/crm
-func RegisterRoutes(r chi.Router, leadH *handler.LeadHandler, followUpH *handler.FollowUpHandler, quotationH *handler.QuotationHandler, complaintH *handler.ComplaintHandler) {
+func RegisterRoutes(r chi.Router, requireAuth func(http.Handler) http.Handler, leadH *handler.LeadHandler, followUpH *handler.FollowUpHandler, quotationH *handler.QuotationHandler, complaintH *handler.ComplaintHandler) {
 	r.Route("/api/v1/crm", func(r chi.Router) {
 		// ALL CRM routes require authentication
-		r.Use(middleware.RequireAuth)
+		r.Use(requireAuth)
 
 		// =====================================================
 		// A. Leads Pipeline

@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"log"
-	"os"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -25,7 +24,12 @@ func main() {
 	logger.Init()
 	logger.Log.Info("Starting Spacesio Beryl API...")
 
-	// 2. Connect to PostgreSQL
+	// 2. Reject an unsafe configuration before opening any connections
+	if err := cfg.Validate(); err != nil {
+		log.Fatalf("Invalid configuration: %v", err)
+	}
+
+	// 3. Connect to PostgreSQL
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	dbPool, err := pgxpool.New(ctx, cfg.DatabaseURL)
@@ -52,9 +56,6 @@ func main() {
 		// MinIO failure is non-fatal — quotation PDFs will fail but the API will still run
 		logger.Log.Error("MinIO initialization failed (PDF generation will be unavailable)", "error", err)
 	}
-
-	// 6. Set JWT secret as env var for middleware
-	os.Setenv("JWT_SECRET", cfg.JWTSecret)
 
 	// 7. Create and start the Application
 	application := app.New(dbPool, cfg)

@@ -10,8 +10,6 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	// Shared infrastructure
-	"github.com/spacesioberyl/system-v1/internal/broker"
-	"github.com/spacesioberyl/system-v1/internal/cache"
 	"github.com/spacesioberyl/system-v1/internal/config"
 	"github.com/spacesioberyl/system-v1/internal/logger"
 	appmiddleware "github.com/spacesioberyl/system-v1/internal/middleware"
@@ -54,13 +52,18 @@ type Application struct {
 	Router *chi.Mux
 	DB     *pgxpool.Pool
 	Config *config.Config
+
+	// requireAuth is built once from the configured secret and shared by every module,
+	// so the signing key never travels through the process environment.
+	requireAuth func(http.Handler) http.Handler
 }
 
 func New(db *pgxpool.Pool, cfg *config.Config) *Application {
 	app := &Application{
-		Router: chi.NewRouter(),
-		DB:     db,
-		Config: cfg,
+		Router:      chi.NewRouter(),
+		DB:          db,
+		Config:      cfg,
+		requireAuth: appmiddleware.RequireAuth(cfg.JWTSecret),
 	}
 
 	// Chi's built-in middleware
@@ -91,30 +94,6 @@ func (a *Application) registerSystemRoutes() {
 		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 	})
-
-	// Event test (existing POC: publishes to sync_queue)
-	a.Router.Post("/api/v1/test/ping", a.handlePing)
-}
-
-// handlePing is the existing POC endpoint for testing the RabbitMQ pipeline
-func (a *Application) handlePing(w http.ResponseWriter, r *http.Request) {
-	err := cache.Client.Set(r.Context(), "last_ping", "event_fired", 0).Err()
-	if err != nil {
-		logger.Log.Error("Failed to write to Redis", "error", err)
-	}
-
-	_ = broker.PublishEvent(r.Context(), broker.QueueSyncQueue, map[string]string{
-		"type":    "test_ping",
-		"message": "System operational",
-	})
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]string{
-		"status":   "Event published",
-		"redis":    "last_ping set",
-		"rabbitmq": "sync_queue message sent",
-	})
 }
 
 // =====================================================
@@ -125,7 +104,7 @@ func (a *Application) registerIAM() {
 	repo := iamRepo.NewIAMRepository(a.DB)
 	svc := iamService.NewIAMService(repo, a.Config.JWTSecret)
 	handler := iamHandler.NewIAMHandler(svc)
-	iam.RegisterRoutes(a.Router, handler)
+	iam.RegisterRoutes(a.Router, a.requireAuth, handler)
 	logger.Log.Info("Module 1 (IAM + Ghost Mode) registered")
 }
 
@@ -142,7 +121,7 @@ func (a *Application) registerHR() {
 	expHandler := hrHandler.NewExpenseHandler(expSvc)
 	leaveHandler := hrHandler.NewLeaveHandler(leaveSvc)
 
-	hr.RegisterRoutes(a.Router, attHandler, expHandler, leaveHandler)
+	hr.RegisterRoutes(a.Router, a.requireAuth, attHandler, expHandler, leaveHandler)
 	logger.Log.Info("Module 2 (HR + Leave Management) registered")
 }
 
@@ -162,7 +141,7 @@ func (a *Application) registerCRM() {
 	quotationHandler := crmHandler.NewQuotationHandler(quotationSvc)
 	complaintHandler := crmHandler.NewComplaintHandler(complaintSvc)
 
-	crm.RegisterRoutes(a.Router, leadHandler, followUpHandler, quotationHandler, complaintHandler)
+	crm.RegisterRoutes(a.Router, a.requireAuth, leadHandler, followUpHandler, quotationHandler, complaintHandler)
 	logger.Log.Info("Module 3 (CRM + Client Support) registered")
 }
 
@@ -170,7 +149,7 @@ func (a *Application) registerLogistics() {
 	repo := logRepo.NewLogisticsRepository(a.DB)
 	svc := logService.NewLogisticsService(repo)
 	handler := logHandler.NewLogisticsHandler(svc)
-	logisticsModule.RegisterRoutes(a.Router, handler)
+	logisticsModule.RegisterRoutes(a.Router, a.requireAuth, handler)
 	logger.Log.Info("Module 4 (Logistics) registered")
 }
 
@@ -183,14 +162,14 @@ func (a *Application) registerExecution() {
 	contractorSvc := execService.NewContractorService(contractorRepo)
 	contractorHandler := execHandler.NewContractorHandler(contractorSvc)
 
-	executionModule.RegisterRoutes(a.Router, handler, contractorHandler)
+	executionModule.RegisterRoutes(a.Router, a.requireAuth, handler, contractorHandler)
 	logger.Log.Info("Module 5 (Execution + Contractor Management) registered")
 }
 
 func (a *Application) registerBFF() {
 	svc := bff.NewBFFService(a.DB)
 	handler := bff.NewBFFHandler(svc)
-	bff.RegisterRoutes(a.Router, handler)
+	bff.RegisterRoutes(a.Router, a.requireAuth, handler)
 	logger.Log.Info("Module 6 (BFF / Unified UX) registered")
 }
 

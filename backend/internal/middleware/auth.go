@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
-	"os"
 	"strings"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -33,45 +32,47 @@ func sendAuthError(w http.ResponseWriter, status int, message string) {
 	json.NewEncoder(w).Encode(map[string]string{"error": message})
 }
 
-// RequireAuth ensures the request has a valid, unexpired Access Token
-func RequireAuth(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		authHeader := r.Header.Get("Authorization")
-		if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
-			sendAuthError(w, http.StatusUnauthorized, "Missing or invalid Authorization header")
-			return
-		}
+// RequireAuth returns middleware that ensures the request carries a valid,
+// unexpired Access Token signed with the given secret.
+func RequireAuth(secret string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			authHeader := r.Header.Get("Authorization")
+			if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
+				sendAuthError(w, http.StatusUnauthorized, "Missing or invalid Authorization header")
+				return
+			}
 
-		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
-		secret := os.Getenv("JWT_SECRET") // Ensure this is in your .env!
+			tokenString := strings.TrimPrefix(authHeader, "Bearer ")
 
-		claims := &TokenClaims{}
-		token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
-			return []byte(secret), nil
+			claims := &TokenClaims{}
+			token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
+				return []byte(secret), nil
+			})
+
+			if err != nil || !token.Valid {
+				sendAuthError(w, http.StatusUnauthorized, "Invalid or expired token")
+				return
+			}
+
+			// Check if this specific token was explicitly logged out
+			isBlacklisted, _ := cache.Client.Exists(r.Context(), "blacklist:"+tokenString).Result()
+			if isBlacklisted > 0 {
+				sendAuthError(w, http.StatusUnauthorized, "Token has been revoked (Logged out)")
+				return
+			}
+
+			// Security check: Block 30-day Refresh Tokens from being used to access normal APIs
+			if claims.TokenType != "access" {
+				sendAuthError(w, http.StatusUnauthorized, "Invalid token type. Please use an access token.")
+				return
+			}
+
+			// Inject the verified claims into the request Context
+			ctx := context.WithValue(r.Context(), ClaimsKey, claims)
+			next.ServeHTTP(w, r.WithContext(ctx))
 		})
-
-		if err != nil || !token.Valid {
-			sendAuthError(w, http.StatusUnauthorized, "Invalid or expired token")
-			return
-		}
-
-		// Check if this specific token was explicitly logged out
-		isBlacklisted, _ := cache.Client.Exists(r.Context(), "blacklist:"+tokenString).Result()
-		if isBlacklisted > 0 {
-			sendAuthError(w, http.StatusUnauthorized, "Token has been revoked (Logged out)")
-			return
-		}
-
-		// Security check: Block 30-day Refresh Tokens from being used to access normal APIs
-		if claims.TokenType != "access" {
-			sendAuthError(w, http.StatusUnauthorized, "Invalid token type. Please use an access token.")
-			return
-		}
-
-		// Inject the verified claims into the request Context
-		ctx := context.WithValue(r.Context(), ClaimsKey, claims)
-		next.ServeHTTP(w, r.WithContext(ctx))
-	})
+	}
 }
 
 // RequireRole enforces strict RBAC (e.g., only "admin" or "super_admin" can pass)

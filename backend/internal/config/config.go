@@ -1,8 +1,14 @@
 package config
 
 import (
+	"fmt"
 	"os"
 )
+
+// MinJWTSecretLen is the minimum accepted JWT signing key length. HS256 keys
+// shorter than 32 bytes weaken the signature meaningfully, so we refuse to boot
+// rather than sign forgeable tokens.
+const MinJWTSecretLen = 32
 
 // Config holds all the environment variables for the application
 type Config struct {
@@ -52,6 +58,17 @@ func Load() *Config {
 		WhatsAppPhoneID:           getEnv("WHATSAPP_PHONE_ID", ""),
 		WhatsAppTemplateNamespace: getEnv("WHATSAPP_TEMPLATE_NAMESPACE", ""),
 	}
+}
+
+// Validate rejects configurations that would start the API in an unsafe state.
+func (c *Config) Validate() error {
+	if c.JWTSecret == "" {
+		return fmt.Errorf("JWT_SECRET is not set: refusing to start, as every token would be signed with an empty key")
+	}
+	if len(c.JWTSecret) < MinJWTSecretLen {
+		return fmt.Errorf("JWT_SECRET is %d bytes, minimum is %d: refusing to start with a weak signing key", len(c.JWTSecret), MinJWTSecretLen)
+	}
+	return nil
 }
 
 // getEnv is a helper function to read an environment variable or return a default value

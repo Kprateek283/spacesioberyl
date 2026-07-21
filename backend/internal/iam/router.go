@@ -1,6 +1,7 @@
 package iam
 
 import (
+	"net/http"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -12,7 +13,7 @@ import (
 )
 
 // RegisterRoutes connects the HTTP paths to the IAM handler functions
-func RegisterRoutes(r chi.Router, h *handler.IAMHandler) {
+func RegisterRoutes(r chi.Router, requireAuth func(http.Handler) http.Handler, h *handler.IAMHandler) {
 
 	// Base API grouping
 	r.Route("/api/v1", func(r chi.Router) {
@@ -30,7 +31,7 @@ func RegisterRoutes(r chi.Router, h *handler.IAMHandler) {
 		// ---------------------------------------------------------
 		r.Group(func(r chi.Router) {
 			// Middleware: Extracts JWT, validates it, and puts User info in Context
-			r.Use(middleware.RequireAuth)
+			r.Use(requireAuth)
 
 			// Personal Routes
 			r.Post("/logout", h.Logout)

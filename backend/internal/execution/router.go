@@ -1,15 +1,16 @@
 package execution
 
 import (
+	"net/http"
+
 	"github.com/go-chi/chi/v5"
 	"github.com/spacesioberyl/system-v1/internal/execution/handler"
-	"github.com/spacesioberyl/system-v1/internal/middleware"
 )
 
 // RegisterRoutes connects all Execution endpoints under /api/v1/execution
-func RegisterRoutes(r chi.Router, h *handler.ExecutionHandler, ch *handler.ContractorHandler) {
+func RegisterRoutes(r chi.Router, requireAuth func(http.Handler) http.Handler, h *handler.ExecutionHandler, ch *handler.ContractorHandler) {
 	r.Route("/api/v1/execution", func(r chi.Router) {
-		r.Use(middleware.RequireAuth)
+		r.Use(requireAuth)
 
 		// A. Installer Directory
 		r.Route("/installers", func(r chi.Router) {

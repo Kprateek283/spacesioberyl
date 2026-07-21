@@ -7,7 +7,18 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/spacesioberyl/system-v1/internal/logger"
+	"github.com/spacesioberyl/system-v1/internal/middleware"
 )
+
+// callerID returns the authenticated user's ID from the request context.
+// ok is false when RequireAuth did not run or the claims are the wrong type.
+func callerID(r *http.Request) (int, bool) {
+	claims, ok := r.Context().Value(middleware.ClaimsKey).(*middleware.TokenClaims)
+	if !ok {
+		return 0, false
+	}
+	return claims.UserID, true
+}
 
 type BFFHandler struct {
 	service *BFFService
@@ -96,8 +107,11 @@ func (h *BFFHandler) UploadProjectDocument(w http.ResponseWriter, r *http.Reques
 		contentType = "application/octet-stream"
 	}
 
-	// NOTE: Hardcoding uploaderID to 1 (Admin/QA) since JWT middleware is temporarily bypassed for BFF.
-	uploaderID := 1 
+	uploaderID, ok := callerID(r)
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
 
 	doc, err := h.service.UploadProjectDocument(ctx, projectID, uploaderID, documentType, fileHeader.Filename, file, fileHeader.Size, contentType)
 	if err != nil {
@@ -117,8 +131,11 @@ func (h *BFFHandler) UploadProjectDocument(w http.ResponseWriter, r *http.Reques
 func (h *BFFHandler) GetActionItems(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	
-	// NOTE: Hardcoding userID to 1 since JWT is temporarily bypassed
-	userID := 1
+	userID, ok := callerID(r)
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
 
 	resp, err := h.service.GetActionItems(ctx, userID)
 	if err != nil {
@@ -135,8 +152,11 @@ func (h *BFFHandler) GetActionItems(w http.ResponseWriter, r *http.Request) {
 func (h *BFFHandler) GetPersonalTimeline(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	
-	// NOTE: Hardcoding userID to 1 since JWT is temporarily bypassed
-	userID := 1
+	userID, ok := callerID(r)
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
 
 	resp, err := h.service.GetPersonalTimeline(ctx, userID)
 	if err != nil {
@@ -150,16 +170,20 @@ func (h *BFFHandler) GetPersonalTimeline(w http.ResponseWriter, r *http.Request)
 }
 
 // RegisterRoutes registers the unified BFF endpoints
-func RegisterRoutes(r chi.Router, h *BFFHandler) {
-	// Note: Authentication middleware (JWT verification) should ideally wrap these routes 
-	// based on the system's global middleware configuration.
+func RegisterRoutes(r chi.Router, requireAuth func(http.Handler) http.Handler, h *BFFHandler) {
 	r.Route("/api/v1/projects", func(r chi.Router) {
+		// ALL project routes require authentication
+		r.Use(requireAuth)
+
 		r.Get("/pipeline", h.GetPipeline)
 		r.Get("/{id}/details", h.GetProjectDetails)
 		r.Post("/{id}/docs", h.UploadProjectDocument)
 	})
 
 	r.Route("/api/v1/workspace", func(r chi.Router) {
+		// ALL workspace routes require authentication
+		r.Use(requireAuth)
+
 		r.Get("/action-items", h.GetActionItems)
 		r.Get("/personal-timeline", h.GetPersonalTimeline)
 	})

@@ -1,16 +1,18 @@
 package hr
 
 import (
+	"net/http"
+
 	"github.com/go-chi/chi/v5"
 	"github.com/spacesioberyl/system-v1/internal/hr/handler"
 	"github.com/spacesioberyl/system-v1/internal/middleware"
 )
 
 // RegisterRoutes connects all HR endpoints under /api/v1/hr
-func RegisterRoutes(r chi.Router, attH *handler.AttendanceHandler, expH *handler.ExpenseHandler, leaveH *handler.LeaveHandler) {
+func RegisterRoutes(r chi.Router, requireAuth func(http.Handler) http.Handler, attH *handler.AttendanceHandler, expH *handler.ExpenseHandler, leaveH *handler.LeaveHandler) {
 	r.Route("/api/v1/hr", func(r chi.Router) {
 		// ALL HR routes require authentication
-		r.Use(middleware.RequireAuth)
+		r.Use(requireAuth)
 
 		// =====================================================
 		// A. Attendance

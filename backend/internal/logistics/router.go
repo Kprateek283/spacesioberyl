@@ -1,15 +1,16 @@
 package logistics
 
 import (
+	"net/http"
+
 	"github.com/go-chi/chi/v5"
 	"github.com/spacesioberyl/system-v1/internal/logistics/handler"
-	"github.com/spacesioberyl/system-v1/internal/middleware"
 )
 
 // RegisterRoutes connects all Logistics endpoints under /api/v1/logistics
-func RegisterRoutes(r chi.Router, h *handler.LogisticsHandler) {
+func RegisterRoutes(r chi.Router, requireAuth func(http.Handler) http.Handler, h *handler.LogisticsHandler) {
 	r.Route("/api/v1/logistics", func(r chi.Router) {
-		r.Use(middleware.RequireAuth)
+		r.Use(requireAuth)
 
 		// A. Vendor Directory
 		r.Route("/vendors", func(r chi.Router) {
