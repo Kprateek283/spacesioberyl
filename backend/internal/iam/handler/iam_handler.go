@@ -7,10 +7,15 @@ import (
 	"strings"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/go-playground/validator/v10"
 	"github.com/spacesioberyl/system-v1/internal/iam/dto"
 	"github.com/spacesioberyl/system-v1/internal/iam/service"
 	"github.com/spacesioberyl/system-v1/internal/middleware"
 )
+
+// validate enforces the `validate:` struct tags on incoming DTOs. Until this was
+// wired in, those tags were decorative (backend-bugs #9).
+var validate = validator.New(validator.WithRequiredStructEnabled())
 
 type IAMHandler struct {
 	svc *service.IAMService
@@ -34,6 +39,10 @@ func (h *IAMHandler) Login(w http.ResponseWriter, r *http.Request) {
 		sendError(w, http.StatusBadRequest, "Invalid request payload")
 		return
 	}
+	if err := validate.Struct(&req); err != nil {
+		sendError(w, http.StatusBadRequest, "email and password are required")
+		return
+	}
 
 	res, err := h.svc.Login(r.Context(), req)
 	if err != nil {
@@ -53,10 +62,22 @@ func (h *IAMHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 		sendError(w, http.StatusBadRequest, "Invalid request payload")
 		return
 	}
+	if err := validate.Struct(&req); err != nil {
+		sendError(w, http.StatusBadRequest, "name, a valid email, a password of at least 8 characters, role and department are required")
+		return
+	}
 
-	// In a real app, you'd extract the caller's role from the JWT Context here
-	// to ensure an 'admin' isn't trying to create a 'super_admin'.
-	// Assuming the middleware passed, we proceed:
+	// Enforce the role hierarchy: an admin must not be able to mint a
+	// super_admin and take over the tenant (backend-bugs #10).
+	claims, ok := r.Context().Value(middleware.ClaimsKey).(*middleware.TokenClaims)
+	if !ok {
+		sendError(w, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
+	if !middleware.CanAssignRole(claims.Role, req.Role) {
+		sendError(w, http.StatusForbidden, "Forbidden: only a super_admin may create a super_admin")
+		return
+	}
 
 	// First, we need the Service to fetch the Role ID for the requested Role string
 	roleID, err := h.svc.GetRoleID(r.Context(), req.Role)
@@ -132,7 +153,8 @@ func (h *IAMHandler) GetMe(w http.ResponseWriter, r *http.Request) {
 
 // ListUsers maps to GET /api/v1/users (Admin/SuperAdmin only)
 func (h *IAMHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
-	users, err := h.svc.ListUsers(r.Context())
+	limit, offset := middleware.Paginate(r)
+	users, total, err := h.svc.ListUsers(r.Context(), limit, offset)
 	if err != nil {
 		sendError(w, http.StatusInternalServerError, "Failed to fetch users")
 		return
@@ -140,7 +162,7 @@ func (h *IAMHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(users)
+	json.NewEncoder(w).Encode(middleware.NewPage(users, total, limit, offset))
 }
 
 // RefreshToken maps to POST /api/v1/refresh
@@ -164,12 +186,18 @@ func (h *IAMHandler) RefreshToken(w http.ResponseWriter, r *http.Request) {
 
 // Logout maps to POST /api/v1/logout
 func (h *IAMHandler) Logout(w http.ResponseWriter, r *http.Request) {
+	claims, ok := r.Context().Value(middleware.ClaimsKey).(*middleware.TokenClaims)
+	if !ok {
+		sendError(w, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
+
 	// Extract the access token from the Authorization header
 	authHeader := r.Header.Get("Authorization")
 	tokenString := strings.TrimPrefix(authHeader, "Bearer ")
 
-	// Send it to the service to be blacklisted in Redis
-	if err := h.svc.Logout(r.Context(), tokenString); err != nil {
+	// Blacklist the access token and revoke every refresh token for this user
+	if err := h.svc.Logout(r.Context(), tokenString, claims.UserID); err != nil {
 		sendError(w, http.StatusInternalServerError, "Failed to logout completely")
 		return
 	}
@@ -193,6 +221,10 @@ func (h *IAMHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 		sendError(w, http.StatusBadRequest, "Invalid request payload")
 		return
 	}
+	if err := validate.Struct(&req); err != nil {
+		sendError(w, http.StatusBadRequest, "new_password must be at least 8 characters")
+		return
+	}
 
 	if err := h.svc.ChangePassword(r.Context(), claims.UserID, req.OldPassword, req.NewPassword); err != nil {
 		sendError(w, http.StatusBadRequest, err.Error())
@@ -209,6 +241,10 @@ func (h *IAMHandler) ForgotPassword(w http.ResponseWriter, r *http.Request) {
 	var req dto.ForgotPasswordRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		sendError(w, http.StatusBadRequest, "Invalid request payload")
+		return
+	}
+	if err := validate.Struct(&req); err != nil {
+		sendError(w, http.StatusBadRequest, "a valid email is required")
 		return
 	}
 
@@ -228,6 +264,10 @@ func (h *IAMHandler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 	var req dto.ResetPasswordRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		sendError(w, http.StatusBadRequest, "Invalid request payload")
+		return
+	}
+	if err := validate.Struct(&req); err != nil {
+		sendError(w, http.StatusBadRequest, "a valid email, the OTP, and a new_password of at least 8 characters are required")
 		return
 	}
 

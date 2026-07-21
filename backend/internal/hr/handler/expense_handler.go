@@ -50,7 +50,8 @@ func (h *ExpenseHandler) List(w http.ResponseWriter, r *http.Request) {
 	endDate := r.URL.Query().Get("end_date")
 	loggedBy, _ := strconv.Atoi(r.URL.Query().Get("logged_by"))
 
-	expenses, err := h.svc.List(r.Context(), startDate, endDate, loggedBy)
+	limit, offset := middleware.Paginate(r)
+	expenses, total, err := h.svc.List(r.Context(), startDate, endDate, loggedBy, limit, offset)
 	if err != nil {
 		sendHRError(w, http.StatusInternalServerError, "Failed to fetch expenses")
 		return
@@ -58,7 +59,7 @@ func (h *ExpenseHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(expenses)
+	json.NewEncoder(w).Encode(middleware.NewPage(expenses, total, limit, offset))
 }
 
 // GetByID maps to GET /api/v1/hr/expenses/:id

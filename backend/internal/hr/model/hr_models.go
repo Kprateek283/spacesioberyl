@@ -25,7 +25,7 @@ type Attendance struct {
 type Expense struct {
 	ID          int       `json:"id" db:"id"`
 	LoggedBy    int       `json:"logged_by" db:"logged_by"`
-	Amount      float64   `json:"amount" db:"amount"`
+	Amount      int64     `json:"amount" db:"amount"` // paise
 	PersonPaid  string    `json:"person_paid" db:"person_paid"`
 	Context     string    `json:"context" db:"context"`
 	ExpenseDate time.Time `json:"expense_date" db:"expense_date"`

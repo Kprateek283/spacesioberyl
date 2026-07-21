@@ -47,14 +47,15 @@ func (h *LeadHandler) List(w http.ResponseWriter, r *http.Request) {
 	status := r.URL.Query().Get("status")
 	assignedTo, _ := strconv.Atoi(r.URL.Query().Get("assigned_to"))
 
-	leads, err := h.svc.List(r.Context(), status, assignedTo)
+	limit, offset := middleware.Paginate(r)
+	leads, total, err := h.svc.List(r.Context(), status, assignedTo, limit, offset)
 	if err != nil {
 		sendCRMError(w, http.StatusInternalServerError, "Failed to fetch leads")
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(leads)
+	json.NewEncoder(w).Encode(middleware.NewPage(leads, total, limit, offset))
 }
 
 func (h *LeadHandler) GetByID(w http.ResponseWriter, r *http.Request) {

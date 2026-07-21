@@ -45,3 +45,15 @@ type User struct {
 	// Joined field: Used when we fetch a user and join the roles table
 	RoleName RoleName `db:"role_name"`
 }
+
+// RefreshToken represents a row in the 'refresh_tokens' table. It exists so a
+// refresh token can be rotated and revoked server-side (backend-bugs #7/#8).
+type RefreshToken struct {
+	ID        int        `db:"id"`
+	UserID    int        `db:"user_id"`
+	JTI       string     `db:"jti"`
+	GhostMode bool       `db:"ghost_mode"`
+	ExpiresAt time.Time  `db:"expires_at"`
+	RevokedAt *time.Time `db:"revoked_at"`
+	CreatedAt time.Time  `db:"created_at"`
+}

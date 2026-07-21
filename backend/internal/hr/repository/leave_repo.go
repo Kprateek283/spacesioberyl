@@ -55,18 +55,26 @@ func (r *LeaveRepository) ListByUser(ctx context.Context, userID int) ([]*model.
 }
 
 // ListAll returns all leave records, optionally filtered by status
-func (r *LeaveRepository) ListAll(ctx context.Context, status string) ([]*model.Leave, error) {
-	query := `SELECT ` + leaveColumns + ` FROM hr_leaves WHERE 1=1`
+// ListAll returns a page of leaves plus the total matching the filter (#30).
+func (r *LeaveRepository) ListAll(ctx context.Context, status string, limit, offset int) ([]*model.Leave, int, error) {
+	where := " WHERE 1=1"
 	args := []interface{}{}
-	argIdx := 1
-
 	if status != "" {
-		query += fmt.Sprintf(" AND status = $%d", argIdx)
+		where += fmt.Sprintf(" AND status = $%d", len(args)+1)
 		args = append(args, status)
 	}
-	query += " ORDER BY created_at DESC"
 
-	return r.queryLeaves(ctx, query, args...)
+	var total int
+	if err := r.db.QueryRow(ctx, "SELECT COUNT(*) FROM hr_leaves"+where, args...).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+
+	query := `SELECT ` + leaveColumns + ` FROM hr_leaves` + where +
+		fmt.Sprintf(" ORDER BY created_at DESC LIMIT $%d OFFSET $%d", len(args)+1, len(args)+2)
+	args = append(args, limit, offset)
+
+	leaves, err := r.queryLeaves(ctx, query, args...)
+	return leaves, total, err
 }
 
 // GetByID fetches a single leave by ID
@@ -83,7 +91,10 @@ func (r *LeaveRepository) GetByID(ctx context.Context, id int) (*model.Leave, er
 }
 
 // UserEdit updates dates/reason of a leave (only if still pending)
-func (r *LeaveRepository) UserEdit(ctx context.Context, id int, startDate, endDate *time.Time, reason string) error {
+// UserEdit updates a user's own pending leave. Ownership and status are enforced
+// in the WHERE clause (like Cancel) so the check and the write are one atomic
+// statement — no read-then-write race (backend-bugs #29).
+func (r *LeaveRepository) UserEdit(ctx context.Context, id, userID int, startDate, endDate *time.Time, reason string) error {
 	query := `UPDATE hr_leaves SET updated_at = CURRENT_TIMESTAMP`
 	args := []interface{}{}
 	argIdx := 1
@@ -104,15 +115,15 @@ func (r *LeaveRepository) UserEdit(ctx context.Context, id int, startDate, endDa
 		argIdx++
 	}
 
-	query += fmt.Sprintf(" WHERE id = $%d AND status = 'pending'", argIdx)
-	args = append(args, id)
+	query += fmt.Sprintf(" WHERE id = $%d AND user_id = $%d AND status = 'pending'", argIdx, argIdx+1)
+	args = append(args, id, userID)
 
 	tag, err := r.db.Exec(ctx, query, args...)
 	if err != nil {
 		return err
 	}
 	if tag.RowsAffected() == 0 {
-		return errors.New("leave not found or cannot be edited (status is not pending)")
+		return errors.New("leave not found, not yours, or cannot be edited (status is not pending)")
 	}
 	return nil
 }

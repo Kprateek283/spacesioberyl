@@ -61,24 +61,14 @@ func (s *LeaveService) MyLeaves(ctx context.Context, userID int) ([]*model.Leave
 }
 
 // ListAll returns all leaves for admin view, with optional status filter
-func (s *LeaveService) ListAll(ctx context.Context, status string) ([]*model.Leave, error) {
-	return s.repo.ListAll(ctx, status)
+func (s *LeaveService) ListAll(ctx context.Context, status string, limit, offset int) ([]*model.Leave, int, error) {
+	return s.repo.ListAll(ctx, status, limit, offset)
 }
 
-// EditLeave allows a user to edit their pending leave request
+// EditLeave allows a user to edit their pending leave request. Ownership and the
+// pending-status requirement are enforced atomically in UserEdit's WHERE clause,
+// so there is no separate read-then-write gate to race (backend-bugs #29).
 func (s *LeaveService) EditLeave(ctx context.Context, leaveID, userID int, req dto.EditLeaveRequest) error {
-	// Verify ownership
-	leave, err := s.repo.GetByID(ctx, leaveID)
-	if err != nil {
-		return err
-	}
-	if leave.UserID != userID {
-		return errors.New("you can only edit your own leave requests")
-	}
-	if leave.Status != "pending" {
-		return errors.New("can only edit leave requests with status 'pending'")
-	}
-
 	var startDate, endDate *time.Time
 	if req.StartDate != "" {
 		t, err := time.Parse("2006-01-02", req.StartDate)
@@ -95,7 +85,7 @@ func (s *LeaveService) EditLeave(ctx context.Context, leaveID, userID int, req d
 		endDate = &t
 	}
 
-	return s.repo.UserEdit(ctx, leaveID, startDate, endDate, req.Reason)
+	return s.repo.UserEdit(ctx, leaveID, userID, startDate, endDate, req.Reason)
 }
 
 // Cancel allows a user to cancel their own pending leave request

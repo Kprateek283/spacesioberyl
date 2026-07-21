@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -102,17 +103,24 @@ func (r *IAMRepository) GetUserByID(ctx context.Context, id int) (*model.User, e
 }
 
 // ListUsers fetches all users in the system, ordered by creation date
-func (r *IAMRepository) ListUsers(ctx context.Context) ([]*model.User, error) {
+// ListUsers returns a page of users plus the total user count (#30).
+func (r *IAMRepository) ListUsers(ctx context.Context, limit, offset int) ([]*model.User, int, error) {
+	var total int
+	if err := r.db.QueryRow(ctx, "SELECT COUNT(*) FROM users").Scan(&total); err != nil {
+		return nil, 0, err
+	}
+
 	query := `
 		SELECT u.id, u.name, u.email, u.password_hash, u.role_id, u.department, u.is_active,
 		       u.pin_hash, u.high_security_pin_hash, r.name as role_name
 		FROM users u
 		JOIN roles r ON u.role_id = r.id
 		ORDER BY u.created_at DESC
+		LIMIT $1 OFFSET $2
 	`
-	rows, err := r.db.Query(ctx, query)
+	rows, err := r.db.Query(ctx, query, limit, offset)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	defer rows.Close()
 
@@ -125,11 +133,11 @@ func (r *IAMRepository) ListUsers(ctx context.Context) ([]*model.User, error) {
 			&user.PinHash, &user.HighSecurityPinHash, &user.RoleName,
 		)
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		users = append(users, &user)
 	}
-	return users, rows.Err()
+	return users, total, rows.Err()
 }
 
 // UpdatePassword forcefully updates a user's password hash
@@ -146,6 +154,44 @@ func (r *IAMRepository) UpdatePassword(ctx context.Context, userID int, newHash 
 	}
 
 	return nil
+}
+
+// InsertRefreshToken records a newly issued refresh token so it can later be
+// rotated or revoked (backend-bugs #7/#8).
+func (r *IAMRepository) InsertRefreshToken(ctx context.Context, userID int, jti string, ghostMode bool, expiresAt time.Time) error {
+	_, err := r.db.Exec(ctx,
+		`INSERT INTO refresh_tokens (user_id, jti, ghost_mode, expires_at) VALUES ($1, $2, $3, $4)`,
+		userID, jti, ghostMode, expiresAt)
+	return err
+}
+
+// GetRefreshTokenByJTI looks up a stored refresh token by its jti. A missing row
+// (unknown or pruned token) returns pgx.ErrNoRows.
+func (r *IAMRepository) GetRefreshTokenByJTI(ctx context.Context, jti string) (*model.RefreshToken, error) {
+	var t model.RefreshToken
+	err := r.db.QueryRow(ctx,
+		`SELECT id, user_id, jti, ghost_mode, expires_at, revoked_at, created_at
+		 FROM refresh_tokens WHERE jti = $1`, jti).Scan(
+		&t.ID, &t.UserID, &t.JTI, &t.GhostMode, &t.ExpiresAt, &t.RevokedAt, &t.CreatedAt)
+	if err != nil {
+		return nil, err
+	}
+	return &t, nil
+}
+
+// RevokeRefreshToken marks a single refresh token revoked (used on rotation).
+func (r *IAMRepository) RevokeRefreshToken(ctx context.Context, jti string) error {
+	_, err := r.db.Exec(ctx,
+		`UPDATE refresh_tokens SET revoked_at = CURRENT_TIMESTAMP WHERE jti = $1 AND revoked_at IS NULL`, jti)
+	return err
+}
+
+// RevokeAllUserRefreshTokens revokes every active refresh token for a user
+// (used on logout and on refresh-token reuse detection).
+func (r *IAMRepository) RevokeAllUserRefreshTokens(ctx context.Context, userID int) error {
+	_, err := r.db.Exec(ctx,
+		`UPDATE refresh_tokens SET revoked_at = CURRENT_TIMESTAMP WHERE user_id = $1 AND revoked_at IS NULL`, userID)
+	return err
 }
 
 // SetupPins stores both hashed PINs for the Super Admin (Ghost Mode initialization)

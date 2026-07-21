@@ -14,26 +14,20 @@ import (
 	"github.com/spacesioberyl/system-v1/internal/logger"
 )
 
-// consumeWhatsApp starts consuming from the whatsapp_queue and processes each message
-// by calling the Meta WhatsApp Cloud API.
-func consumeWhatsApp(cfg *config.Config) {
-	// Guard: if WhatsApp is not configured, skip this consumer
-	if cfg.WhatsAppToken == "" || cfg.WhatsAppPhoneID == "" {
-		logger.Log.Warn("WhatsApp consumer disabled — WHATSAPP_TOKEN or WHATSAPP_PHONE_ID not set")
-		return
-	}
-
+// consumeWhatsApp consumes from the whatsapp_queue and processes each message by
+// calling the Meta WhatsApp Cloud API. The "is WhatsApp configured" guard lives
+// at the call site so a disabled integration is not supervised into a restart
+// loop. Returns when the delivery channel closes so the supervisor can restart it.
+func consumeWhatsApp(cfg *config.Config) error {
 	ch, err := broker.Conn.Channel()
 	if err != nil {
-		logger.Log.Error("Failed to open channel for whatsapp consumer", "error", err)
-		return
+		return fmt.Errorf("open channel: %w", err)
 	}
 	defer ch.Close()
 
 	msgs, err := ch.Consume(broker.QueueWhatsApp, "worker-whatsapp", true, false, false, false, nil)
 	if err != nil {
-		logger.Log.Error("Failed to start consuming whatsapp_queue", "error", err)
-		return
+		return fmt.Errorf("start consuming: %w", err)
 	}
 
 	logger.Log.Info("Consumer started", "queue", broker.QueueWhatsApp)
@@ -56,6 +50,7 @@ func consumeWhatsApp(cfg *config.Config) {
 				"phone", notif.Phone, "template", notif.TemplateName)
 		}
 	}
+	return nil // delivery channel closed → supervisor restarts
 }
 
 // sendWhatsAppTemplate constructs the Meta Cloud API payload and POSTs it.

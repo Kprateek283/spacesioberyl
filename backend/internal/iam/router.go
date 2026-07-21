@@ -1,6 +1,7 @@
 package iam
 
 import (
+	"net/http"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -12,7 +13,7 @@ import (
 )
 
 // RegisterRoutes connects the HTTP paths to the IAM handler functions
-func RegisterRoutes(r chi.Router, h *handler.IAMHandler) {
+func RegisterRoutes(r chi.Router, requireAuth func(http.Handler) http.Handler, h *handler.IAMHandler) {
 
 	// Base API grouping
 	r.Route("/api/v1", func(r chi.Router) {
@@ -22,15 +23,17 @@ func RegisterRoutes(r chi.Router, h *handler.IAMHandler) {
 		// ---------------------------------------------------------
 		r.With(httprate.LimitByIP(5, 1*time.Minute)).Post("/login", h.Login)
 		r.Post("/refresh", h.RefreshToken)
-		r.Post("/password/forgot", h.ForgotPassword)
-		r.Post("/password/reset", h.ResetPassword)
+		// Password-reset endpoints carry the same per-IP limit as /login so the
+		// OTP flow is not brute-forceable (backend-bugs #21).
+		r.With(httprate.LimitByIP(5, 1*time.Minute)).Post("/password/forgot", h.ForgotPassword)
+		r.With(httprate.LimitByIP(5, 1*time.Minute)).Post("/password/reset", h.ResetPassword)
 
 		// ---------------------------------------------------------
 		// 2. PROTECTED ROUTES (Requires valid Access Token)
 		// ---------------------------------------------------------
 		r.Group(func(r chi.Router) {
 			// Middleware: Extracts JWT, validates it, and puts User info in Context
-			r.Use(middleware.RequireAuth)
+			r.Use(requireAuth)
 
 			// Personal Routes
 			r.Post("/logout", h.Logout)

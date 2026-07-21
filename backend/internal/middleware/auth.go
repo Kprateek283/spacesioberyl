@@ -3,8 +3,8 @@ package middleware
 import (
 	"context"
 	"encoding/json"
+	"net"
 	"net/http"
-	"os"
 	"strings"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -33,45 +33,54 @@ func sendAuthError(w http.ResponseWriter, status int, message string) {
 	json.NewEncoder(w).Encode(map[string]string{"error": message})
 }
 
-// RequireAuth ensures the request has a valid, unexpired Access Token
-func RequireAuth(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		authHeader := r.Header.Get("Authorization")
-		if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
-			sendAuthError(w, http.StatusUnauthorized, "Missing or invalid Authorization header")
-			return
-		}
+// RequireAuth returns middleware that ensures the request carries a valid,
+// unexpired Access Token signed with the given secret.
+func RequireAuth(secret string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			authHeader := r.Header.Get("Authorization")
+			if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
+				sendAuthError(w, http.StatusUnauthorized, "Missing or invalid Authorization header")
+				return
+			}
 
-		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
-		secret := os.Getenv("JWT_SECRET") // Ensure this is in your .env!
+			tokenString := strings.TrimPrefix(authHeader, "Bearer ")
 
-		claims := &TokenClaims{}
-		token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
-			return []byte(secret), nil
+			claims := &TokenClaims{}
+			token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
+				return []byte(secret), nil
+			})
+
+			if err != nil || !token.Valid {
+				sendAuthError(w, http.StatusUnauthorized, "Invalid or expired token")
+				return
+			}
+
+			// Check if this specific token was explicitly logged out. A revocation
+			// check must fail closed: if Redis is unreachable we cannot prove the
+			// token is still valid, so we reject rather than let a revoked token
+			// through (backend-bugs #6).
+			isBlacklisted, err := cache.Client.Exists(r.Context(), "blacklist:"+tokenString).Result()
+			if err != nil {
+				sendAuthError(w, http.StatusServiceUnavailable, "Authorization service temporarily unavailable")
+				return
+			}
+			if isBlacklisted > 0 {
+				sendAuthError(w, http.StatusUnauthorized, "Token has been revoked (Logged out)")
+				return
+			}
+
+			// Security check: Block 30-day Refresh Tokens from being used to access normal APIs
+			if claims.TokenType != "access" {
+				sendAuthError(w, http.StatusUnauthorized, "Invalid token type. Please use an access token.")
+				return
+			}
+
+			// Inject the verified claims into the request Context
+			ctx := context.WithValue(r.Context(), ClaimsKey, claims)
+			next.ServeHTTP(w, r.WithContext(ctx))
 		})
-
-		if err != nil || !token.Valid {
-			sendAuthError(w, http.StatusUnauthorized, "Invalid or expired token")
-			return
-		}
-
-		// Check if this specific token was explicitly logged out
-		isBlacklisted, _ := cache.Client.Exists(r.Context(), "blacklist:"+tokenString).Result()
-		if isBlacklisted > 0 {
-			sendAuthError(w, http.StatusUnauthorized, "Token has been revoked (Logged out)")
-			return
-		}
-
-		// Security check: Block 30-day Refresh Tokens from being used to access normal APIs
-		if claims.TokenType != "access" {
-			sendAuthError(w, http.StatusUnauthorized, "Invalid token type. Please use an access token.")
-			return
-		}
-
-		// Inject the verified claims into the request Context
-		ctx := context.WithValue(r.Context(), ClaimsKey, claims)
-		next.ServeHTTP(w, r.WithContext(ctx))
-	})
+	}
 }
 
 // RequireRole enforces strict RBAC (e.g., only "admin" or "super_admin" can pass)
@@ -102,6 +111,28 @@ func RequireRole(allowedRoles ...string) func(http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 		})
 	}
+}
+
+// ClientIP returns the client's network address from the socket peer.
+// With no reverse proxy in front (the API is directly exposed), r.RemoteAddr is
+// the only trustworthy source — forwarded headers are attacker-controlled and
+// are deliberately ignored (backend-bugs #4/#11).
+func ClientIP(r *http.Request) string {
+	if host, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
+		return host
+	}
+	return r.RemoteAddr
+}
+
+// CanAssignRole reports whether a caller with callerRole may create a user with,
+// or promote a user to, targetRole. Only a super_admin may mint another
+// super_admin; anything below that any admin/super_admin may assign
+// (backend-bugs #10). This is the single place the hierarchy is written down.
+func CanAssignRole(callerRole, targetRole string) bool {
+	if targetRole == "super_admin" {
+		return callerRole == "super_admin"
+	}
+	return true
 }
 
 // GetGhostMode extracts the ghost_mode flag from the request context.

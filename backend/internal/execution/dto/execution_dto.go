@@ -4,7 +4,7 @@ type CreateInstallerRequest struct {
 	Name                 string  `json:"name" validate:"required"`
 	Phone                string  `json:"phone" validate:"required"`
 	ExpertiseArea        string  `json:"expertise_area"`
-	StandardRate         float64 `json:"standard_rate"`
+	StandardRate         int64   `json:"standard_rate"` // paise
 	PreferredPaymentMode string  `json:"preferred_payment_mode"`
 }
 
@@ -14,7 +14,7 @@ type CreateInstallationRequest struct {
 
 type AssignInstallerRequest struct {
 	InstallerID             int     `json:"installer_id" validate:"required"`
-	AgreedInstallerPrice    float64 `json:"agreed_installer_price"`
+	AgreedInstallerPrice    int64   `json:"agreed_installer_price"` // paise
 	EstimatedCompletionDate string  `json:"estimated_completion_date"` // YYYY-MM-DD
 }
 
@@ -55,7 +55,7 @@ type InstallerCheckOutRequest struct {
 }
 
 type RecordInstallerPaymentRequest struct {
-	Amount               float64 `json:"amount" validate:"required"`
+	Amount               int64   `json:"amount" validate:"required"` // paise
 	PaymentType          string  `json:"payment_type" validate:"required"`  // 'advance' or 'final_discharge'
 	PaymentMode          string  `json:"payment_mode" validate:"required"`  // 'cash', 'bank_transfer', 'upi'
 	TransactionReference string  `json:"transaction_reference"`
@@ -64,11 +64,11 @@ type RecordInstallerPaymentRequest struct {
 type InstallerLedgerResponse struct {
 	InstallationID   int     `json:"installation_id"`
 	InstallerID      int     `json:"installer_id"`
-	AgreedPrice      float64 `json:"agreed_price"`
-	TotalAdvance     float64 `json:"total_advance"`
-	TotalFinal       float64 `json:"total_final"`
-	TotalPaid        float64 `json:"total_paid"`
-	RemainingBalance float64 `json:"remaining_balance"`
+	AgreedPrice      int64 `json:"agreed_price"`      // paise
+	TotalAdvance     int64 `json:"total_advance"`     // paise
+	TotalFinal       int64 `json:"total_final"`       // paise
+	TotalPaid        int64 `json:"total_paid"`        // paise
+	RemainingBalance int64 `json:"remaining_balance"` // paise
 }
 
 // ---------------------------------------------------------

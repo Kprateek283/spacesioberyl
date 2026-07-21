@@ -38,34 +38,35 @@ func (r *ExpenseRepository) Create(ctx context.Context, e *model.Expense) (*mode
 }
 
 // List returns expenses with optional date and user filters
-func (r *ExpenseRepository) List(ctx context.Context, startDate, endDate string, loggedBy int) ([]*model.Expense, error) {
-	query := `
-		SELECT id, logged_by, amount, person_paid, context, expense_date, receipt_url, created_at, updated_at
-		FROM office_expenses WHERE 1=1
-	`
+// List returns a page of expenses plus the total matching the filters (#30).
+func (r *ExpenseRepository) List(ctx context.Context, startDate, endDate string, loggedBy, limit, offset int) ([]*model.Expense, int, error) {
+	where := " WHERE 1=1"
 	args := []interface{}{}
-	argIdx := 1
-
 	if startDate != "" {
-		query += fmt.Sprintf(" AND expense_date >= $%d", argIdx)
+		where += fmt.Sprintf(" AND expense_date >= $%d", len(args)+1)
 		args = append(args, startDate)
-		argIdx++
 	}
 	if endDate != "" {
-		query += fmt.Sprintf(" AND expense_date <= $%d", argIdx)
+		where += fmt.Sprintf(" AND expense_date <= $%d", len(args)+1)
 		args = append(args, endDate)
-		argIdx++
 	}
 	if loggedBy > 0 {
-		query += fmt.Sprintf(" AND logged_by = $%d", argIdx)
+		where += fmt.Sprintf(" AND logged_by = $%d", len(args)+1)
 		args = append(args, loggedBy)
-		argIdx++
 	}
-	query += " ORDER BY expense_date DESC, created_at DESC"
+
+	var total int
+	if err := r.db.QueryRow(ctx, "SELECT COUNT(*) FROM office_expenses"+where, args...).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+
+	query := `SELECT id, logged_by, amount, person_paid, context, expense_date, receipt_url, created_at, updated_at FROM office_expenses` +
+		where + fmt.Sprintf(" ORDER BY expense_date DESC, created_at DESC LIMIT $%d OFFSET $%d", len(args)+1, len(args)+2)
+	args = append(args, limit, offset)
 
 	rows, err := r.db.Query(ctx, query, args...)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	defer rows.Close()
 
@@ -78,11 +79,11 @@ func (r *ExpenseRepository) List(ctx context.Context, startDate, endDate string,
 			&e.CreatedAt, &e.UpdatedAt,
 		)
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		expenses = append(expenses, &e)
 	}
-	return expenses, rows.Err()
+	return expenses, total, rows.Err()
 }
 
 // GetByID fetches a single expense by ID

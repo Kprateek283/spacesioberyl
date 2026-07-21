@@ -1,17 +1,17 @@
 package app
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	// Shared infrastructure
-	"github.com/spacesioberyl/system-v1/internal/broker"
-	"github.com/spacesioberyl/system-v1/internal/cache"
 	"github.com/spacesioberyl/system-v1/internal/config"
 	"github.com/spacesioberyl/system-v1/internal/logger"
 	appmiddleware "github.com/spacesioberyl/system-v1/internal/middleware"
@@ -54,20 +54,31 @@ type Application struct {
 	Router *chi.Mux
 	DB     *pgxpool.Pool
 	Config *config.Config
+	srv    *http.Server
+
+	// requireAuth is built once from the configured secret and shared by every module,
+	// so the signing key never travels through the process environment.
+	requireAuth func(http.Handler) http.Handler
 }
 
 func New(db *pgxpool.Pool, cfg *config.Config) *Application {
 	app := &Application{
-		Router: chi.NewRouter(),
-		DB:     db,
-		Config: cfg,
+		Router:      chi.NewRouter(),
+		DB:          db,
+		Config:      cfg,
+		requireAuth: appmiddleware.RequireAuth(cfg.JWTSecret),
 	}
 
-	// Chi's built-in middleware
+	// Chi's built-in middleware.
+	// RealIP is deliberately NOT used: the API is directly exposed (no reverse
+	// proxy strips forwarded headers), so trusting X-Forwarded-For/X-Real-IP
+	// would let a client spoof its address and defeat rate limiting and the
+	// attendance geofence. r.RemoteAddr (the socket peer) is the trusted source
+	// (backend-bugs #4/#11).
 	app.Router.Use(chimiddleware.Logger)
 	app.Router.Use(chimiddleware.Recoverer)
-	app.Router.Use(chimiddleware.RealIP) // Ensures r.RemoteAddr is the real client IP
-	app.Router.Use(appmiddleware.CORS)
+	app.Router.Use(appmiddleware.LimitBody) // bound request bodies (backend-bugs #19)
+	app.Router.Use(appmiddleware.CORS(cfg.CORSAllowedOrigins))
 
 	// System routes
 	app.registerSystemRoutes()
@@ -80,6 +91,19 @@ func New(db *pgxpool.Pool, cfg *config.Config) *Application {
 	app.registerExecution()
 	app.registerBFF()
 
+	// Explicit server with timeouts. A bare ListenAndServe is Slowloris-exposed
+	// and lets a stalled client pin a goroutine forever (backend-bugs #17).
+	// WriteTimeout is generous to accommodate the slowest legitimate endpoints
+	// (file upload, PDF generation) — tune with real measurements.
+	app.srv = &http.Server{
+		Addr:              fmt.Sprintf(":%s", cfg.APIPort),
+		Handler:           app.Router,
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       15 * time.Second,
+		WriteTimeout:      60 * time.Second,
+		IdleTimeout:       120 * time.Second,
+	}
+
 	return app
 }
 
@@ -91,30 +115,6 @@ func (a *Application) registerSystemRoutes() {
 		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 	})
-
-	// Event test (existing POC: publishes to sync_queue)
-	a.Router.Post("/api/v1/test/ping", a.handlePing)
-}
-
-// handlePing is the existing POC endpoint for testing the RabbitMQ pipeline
-func (a *Application) handlePing(w http.ResponseWriter, r *http.Request) {
-	err := cache.Client.Set(r.Context(), "last_ping", "event_fired", 0).Err()
-	if err != nil {
-		logger.Log.Error("Failed to write to Redis", "error", err)
-	}
-
-	_ = broker.PublishEvent(r.Context(), broker.QueueSyncQueue, map[string]string{
-		"type":    "test_ping",
-		"message": "System operational",
-	})
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]string{
-		"status":   "Event published",
-		"redis":    "last_ping set",
-		"rabbitmq": "sync_queue message sent",
-	})
 }
 
 // =====================================================
@@ -123,9 +123,9 @@ func (a *Application) handlePing(w http.ResponseWriter, r *http.Request) {
 
 func (a *Application) registerIAM() {
 	repo := iamRepo.NewIAMRepository(a.DB)
-	svc := iamService.NewIAMService(repo, a.Config.JWTSecret)
+	svc := iamService.NewIAMService(repo, a.Config.JWTSecret, a.Config.AppEnv)
 	handler := iamHandler.NewIAMHandler(svc)
-	iam.RegisterRoutes(a.Router, handler)
+	iam.RegisterRoutes(a.Router, a.requireAuth, handler)
 	logger.Log.Info("Module 1 (IAM + Ghost Mode) registered")
 }
 
@@ -142,7 +142,13 @@ func (a *Application) registerHR() {
 	expHandler := hrHandler.NewExpenseHandler(expSvc)
 	leaveHandler := hrHandler.NewLeaveHandler(leaveSvc)
 
-	hr.RegisterRoutes(a.Router, attHandler, expHandler, leaveHandler)
+	hr.RegisterRoutes(a.Router, a.requireAuth, attHandler, expHandler, leaveHandler)
+
+	// The attendance geofence is silently disabled when OFFICE_IP accepts every
+	// address; make that loud rather than a silent security hole (backend-bugs #11).
+	if a.Config.OfficeIP == "" || a.Config.OfficeIP == "0.0.0.0" {
+		logger.Log.Warn("Attendance geofence DISABLED: OFFICE_IP accepts all addresses", "office_ip", a.Config.OfficeIP)
+	}
 	logger.Log.Info("Module 2 (HR + Leave Management) registered")
 }
 
@@ -162,7 +168,7 @@ func (a *Application) registerCRM() {
 	quotationHandler := crmHandler.NewQuotationHandler(quotationSvc)
 	complaintHandler := crmHandler.NewComplaintHandler(complaintSvc)
 
-	crm.RegisterRoutes(a.Router, leadHandler, followUpHandler, quotationHandler, complaintHandler)
+	crm.RegisterRoutes(a.Router, a.requireAuth, leadHandler, followUpHandler, quotationHandler, complaintHandler)
 	logger.Log.Info("Module 3 (CRM + Client Support) registered")
 }
 
@@ -170,7 +176,7 @@ func (a *Application) registerLogistics() {
 	repo := logRepo.NewLogisticsRepository(a.DB)
 	svc := logService.NewLogisticsService(repo)
 	handler := logHandler.NewLogisticsHandler(svc)
-	logisticsModule.RegisterRoutes(a.Router, handler)
+	logisticsModule.RegisterRoutes(a.Router, a.requireAuth, handler)
 	logger.Log.Info("Module 4 (Logistics) registered")
 }
 
@@ -183,19 +189,33 @@ func (a *Application) registerExecution() {
 	contractorSvc := execService.NewContractorService(contractorRepo)
 	contractorHandler := execHandler.NewContractorHandler(contractorSvc)
 
-	executionModule.RegisterRoutes(a.Router, handler, contractorHandler)
+	executionModule.RegisterRoutes(a.Router, a.requireAuth, handler, contractorHandler)
 	logger.Log.Info("Module 5 (Execution + Contractor Management) registered")
 }
 
 func (a *Application) registerBFF() {
-	svc := bff.NewBFFService(a.DB)
+	svc := bff.NewBFFService(a.DB,
+		crmRepo.NewLeadRepository(a.DB),
+		crmRepo.NewQuotationRepository(a.DB),
+		logRepo.NewLogisticsRepository(a.DB),
+		execRepo.NewExecutionRepository(a.DB),
+	)
 	handler := bff.NewBFFHandler(svc)
-	bff.RegisterRoutes(a.Router, handler)
+	bff.RegisterRoutes(a.Router, a.requireAuth, handler)
 	logger.Log.Info("Module 6 (BFF / Unified UX) registered")
 }
 
+// Start blocks serving requests until the server is shut down. It returns
+// http.ErrServerClosed after a graceful Shutdown, which the caller treats as a
+// clean exit.
 func (a *Application) Start() error {
-	addr := fmt.Sprintf(":%s", a.Config.APIPort)
-	logger.Log.Info("Starting Spacesio Beryl API Server", "address", addr)
-	return http.ListenAndServe(addr, a.Router)
+	logger.Log.Info("Starting Spacesio Beryl API Server", "address", a.srv.Addr)
+	return a.srv.ListenAndServe()
+}
+
+// Shutdown drains in-flight requests within ctx's deadline, then stops the
+// server so main's deferred pool/broker closes can run (backend-bugs #17).
+func (a *Application) Shutdown(ctx context.Context) error {
+	logger.Log.Info("Shutting down API server, draining in-flight requests...")
+	return a.srv.Shutdown(ctx)
 }

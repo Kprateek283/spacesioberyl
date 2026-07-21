@@ -1,16 +1,18 @@
 package hr
 
 import (
+	"net/http"
+
 	"github.com/go-chi/chi/v5"
 	"github.com/spacesioberyl/system-v1/internal/hr/handler"
 	"github.com/spacesioberyl/system-v1/internal/middleware"
 )
 
 // RegisterRoutes connects all HR endpoints under /api/v1/hr
-func RegisterRoutes(r chi.Router, attH *handler.AttendanceHandler, expH *handler.ExpenseHandler, leaveH *handler.LeaveHandler) {
+func RegisterRoutes(r chi.Router, requireAuth func(http.Handler) http.Handler, attH *handler.AttendanceHandler, expH *handler.ExpenseHandler, leaveH *handler.LeaveHandler) {
 	r.Route("/api/v1/hr", func(r chi.Router) {
 		// ALL HR routes require authentication
-		r.Use(middleware.RequireAuth)
+		r.Use(requireAuth)
 
 		// =====================================================
 		// A. Attendance
@@ -37,9 +39,11 @@ func RegisterRoutes(r chi.Router, attH *handler.AttendanceHandler, expH *handler
 			// Any authenticated user can log an expense
 			r.Post("/", expH.Create)
 
-			// Admin / Super Admin / Accounts can view the ledger
+			// Admin / Super Admin / Accounts can view the ledger.
+			// "accounts" is included provisionally — revisit if the ledger should
+			// be restricted further (backend-bugs #28).
 			r.Group(func(r chi.Router) {
-				r.Use(middleware.RequireRole("admin", "super_admin"))
+				r.Use(middleware.RequireRole("admin", "super_admin", "accounts"))
 				r.Get("/", expH.List)
 				r.Get("/{id}", expH.GetByID)
 			})

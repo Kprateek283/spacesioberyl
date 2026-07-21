@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"html/template"
+	"math"
 	"time"
 
 	"github.com/go-pdf/fpdf"
@@ -36,14 +37,15 @@ func (s *QuotationService) Create(ctx context.Context, leadID, userID int, req d
 		return nil, errors.New("at least one line item is required")
 	}
 
-	// 1. Calculate line-item totals
-	var subtotal float64
+	// 1. Calculate line-item totals. UnitPrice is paise (int64), Quantity is a
+	// count (float64); the line total is rounded to whole paise.
+	var subtotal int64
 	var items []*model.QuotationLineItem
 	for _, li := range req.LineItems {
 		if li.Quantity <= 0 || li.UnitPrice <= 0 {
 			return nil, errors.New("quantity and unit_price must be greater than zero")
 		}
-		lineTotal := li.Quantity * li.UnitPrice
+		lineTotal := int64(math.Round(li.Quantity * float64(li.UnitPrice)))
 		subtotal += lineTotal
 
 		desc := li.Description
@@ -56,8 +58,8 @@ func (s *QuotationService) Create(ctx context.Context, leadID, userID int, req d
 		})
 	}
 
-	// 2. Calculate tax (per-quotation rate, entered manually by user)
-	taxAmount := subtotal * (req.TaxRate / 100)
+	// 2. Calculate tax (per-quotation rate, entered manually by user), rounded to paise.
+	taxAmount := int64(math.Round(float64(subtotal) * req.TaxRate / 100))
 	totalAmount := subtotal + taxAmount
 
 	// 3. Marshal payment_term_details
@@ -174,8 +176,8 @@ func (s *QuotationService) generateAndUploadPDF(ctx context.Context, q *model.Qu
 		pdf.CellFormat(10, 7, fmt.Sprintf("%d", i+1), "1", 0, "C", false, 0, "")
 		pdf.CellFormat(70, 7, item.ItemName, "1", 0, "L", false, 0, "")
 		pdf.CellFormat(25, 7, fmt.Sprintf("%.2f", item.Quantity), "1", 0, "C", false, 0, "")
-		pdf.CellFormat(35, 7, fmt.Sprintf("%.2f", item.UnitPrice), "1", 0, "R", false, 0, "")
-		pdf.CellFormat(40, 7, fmt.Sprintf("%.2f", item.TotalPrice), "1", 0, "R", false, 0, "")
+		pdf.CellFormat(35, 7, fmt.Sprintf("%.2f", float64(item.UnitPrice)/100), "1", 0, "R", false, 0, "")
+		pdf.CellFormat(40, 7, fmt.Sprintf("%.2f", float64(item.TotalPrice)/100), "1", 0, "R", false, 0, "")
 		pdf.Ln(-1)
 	}
 
@@ -184,18 +186,18 @@ func (s *QuotationService) generateAndUploadPDF(ctx context.Context, q *model.Qu
 	pdf.SetFont("Arial", "", 11)
 	pdf.Cell(105, 7, "")
 	pdf.Cell(40, 7, "Subtotal:")
-	pdf.CellFormat(40, 7, fmt.Sprintf("%.2f", q.Subtotal), "", 0, "R", false, 0, "")
+	pdf.CellFormat(40, 7, fmt.Sprintf("%.2f", float64(q.Subtotal)/100), "", 0, "R", false, 0, "")
 	pdf.Ln(7)
 
 	pdf.Cell(105, 7, "")
 	pdf.Cell(40, 7, fmt.Sprintf("Tax (%.1f%%):", q.TaxRate))
-	pdf.CellFormat(40, 7, fmt.Sprintf("%.2f", q.TaxAmount), "", 0, "R", false, 0, "")
+	pdf.CellFormat(40, 7, fmt.Sprintf("%.2f", float64(q.TaxAmount)/100), "", 0, "R", false, 0, "")
 	pdf.Ln(7)
 
 	pdf.SetFont("Arial", "B", 12)
 	pdf.Cell(105, 8, "")
 	pdf.Cell(40, 8, "Total:")
-	pdf.CellFormat(40, 8, fmt.Sprintf("%.2f", q.TotalAmount), "", 0, "R", false, 0, "")
+	pdf.CellFormat(40, 8, fmt.Sprintf("%.2f", float64(q.TotalAmount)/100), "", 0, "R", false, 0, "")
 
 	// Write PDF to buffer
 	var buf bytes.Buffer
@@ -203,12 +205,14 @@ func (s *QuotationService) generateAndUploadPDF(ctx context.Context, q *model.Qu
 		return "", fmt.Errorf("failed to generate PDF: %w", err)
 	}
 
-	// Upload to MinIO
+	// Upload to the private bucket. UploadFile returns the object key; the stored
+	// value routes through the authenticated /api/v1/files endpoint rather than a
+	// public URL (backend-bugs #12).
 	objectName := fmt.Sprintf("quotations/%d/QT-%06d_%s.pdf", q.LeadID, q.ID, time.Now().Format("20060102"))
-	url, err := storage.UploadFile(ctx, objectName, &buf, int64(buf.Len()), "application/pdf")
+	key, err := storage.UploadFile(ctx, objectName, &buf, int64(buf.Len()), "application/pdf")
 	if err != nil {
 		return "", err
 	}
 
-	return url, nil
+	return "/api/v1/files/" + key, nil
 }

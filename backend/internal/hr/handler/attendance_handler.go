@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
-	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/spacesioberyl/system-v1/internal/hr/dto"
@@ -40,8 +39,10 @@ func (h *AttendanceHandler) CheckIn(w http.ResponseWriter, r *http.Request) {
 		req = dto.CheckInRequest{}
 	}
 
-	// Extract client IP from request (handles X-Forwarded-For)
-	clientIP := extractClientIP(r)
+	// The client IP comes only from the socket peer; forwarded headers are
+	// attacker-controlled and would let a remote check-in spoof the office
+	// network (backend-bugs #11).
+	clientIP := middleware.ClientIP(r)
 
 	att, err := h.svc.CheckIn(r.Context(), claims.UserID, clientIP, req)
 	if err != nil {
@@ -99,7 +100,8 @@ func (h *AttendanceHandler) GetMyAttendance(w http.ResponseWriter, r *http.Reque
 func (h *AttendanceHandler) ListAll(w http.ResponseWriter, r *http.Request) {
 	date := r.URL.Query().Get("date")
 
-	records, err := h.svc.ListAll(r.Context(), date)
+	limit, offset := middleware.Paginate(r)
+	records, total, err := h.svc.ListAll(r.Context(), date, limit, offset)
 	if err != nil {
 		sendHRError(w, http.StatusInternalServerError, "Failed to fetch attendance")
 		return
@@ -107,7 +109,7 @@ func (h *AttendanceHandler) ListAll(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(records)
+	json.NewEncoder(w).Encode(middleware.NewPage(records, total, limit, offset))
 }
 
 // ListOverrides maps to GET /api/v1/hr/attendance/overrides (Admin only)
@@ -152,27 +154,4 @@ func (h *AttendanceHandler) ResolveOverride(w http.ResponseWriter, r *http.Reque
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(dto.BasicResponse{Message: "Override resolved"})
-}
-
-// extractClientIP pulls the real client IP, handling proxies
-func extractClientIP(r *http.Request) string {
-	// Check X-Forwarded-For first (may be set by reverse proxy)
-	xff := r.Header.Get("X-Forwarded-For")
-	if xff != "" {
-		parts := strings.Split(xff, ",")
-		return strings.TrimSpace(parts[0])
-	}
-
-	// Check X-Real-Ip
-	xri := r.Header.Get("X-Real-Ip")
-	if xri != "" {
-		return xri
-	}
-
-	// Fallback to RemoteAddr (strip port)
-	ip := r.RemoteAddr
-	if idx := strings.LastIndex(ip, ":"); idx != -1 {
-		ip = ip[:idx]
-	}
-	return ip
 }

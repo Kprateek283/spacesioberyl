@@ -129,7 +129,7 @@ func (r *ExecutionRepository) GetByID(ctx context.Context, id int) (*model.Insta
 	return &inst, nil
 }
 
-func (r *ExecutionRepository) AssignInstaller(ctx context.Context, jobID, installerID int, price float64, estimatedDate string) error {
+func (r *ExecutionRepository) AssignInstaller(ctx context.Context, jobID, installerID int, price int64, estimatedDate string) error {
 	query := `
 		UPDATE installations SET installer_id = $1, agreed_installer_price = $2, estimated_completion_date = $3,
 		       status = 'in_progress', updated_at = CURRENT_TIMESTAMP
